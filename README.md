@@ -90,58 +90,35 @@ To be the most accessible, culturally familiar, and medically meaningful cogniti
 
 ## 3. Tech Stack & Architecture
 
-### 3.1 Frontend
-| Layer | Technology | Notes |
-|---|---|---|
-| UI Framework | React 18 + Vite | — |
-| Styling | Tailwind CSS | — |
-| UI Components (Admin) | shadcn/ui | Pre-built accessible components for admin panel; saves build time |
-| UI Components (Patient) | Custom Tailwind primitives | Fully custom — elderly UX requires bespoke sizing, touch targets, layouts |
-| Server State Management | **TanStack Query (React Query)** | Handles all Supabase data fetching, caching, background sync, optimistic updates |
-| UI State Management | Zustand *(UI only)* | Modal states, language selection, theme — no server data |
-| Routing | React Router v6 | — |
-| Code Splitting | React.lazy() + Suspense | Per-route and per-game-module lazy loading; critical for performance on budget Android devices |
-| Offline Storage | IndexedDB via Dexie.js | — |
-| PWA / Service Worker | vite-plugin-pwa + **Workbox** (configured) | Workbox strategy required: game assets + audio pre-cached with `CacheFirst`; API calls use `NetworkFirst` |
-| Voice API | Web Speech API + custom NER language pack integration | — |
-| Animations (UI/Transitions) | Framer Motion | Page transitions, card flips, modal animations |
-| Game Rendering (Canvas games) | **react-konva** | Used for Shape Sorter, Spot the Difference, Color Trail — smooth 60fps canvas rendering |
-| Forms | React Hook Form + Zod | — |
+### 3.1 Complete Tech Stack (Frontend, Backend, & Database)
 
-### 3.2 Backend
-| Layer | Technology |
-|---|---|
-| Backend-as-a-Service | Supabase |
-| Database | PostgreSQL (via Supabase) |
-| Authentication | Supabase Auth (email+password) |
-| File Storage | Supabase Storage |
-| Realtime | Supabase Realtime (caregiver alerts) |
-| Edge Functions | Supabase Edge Functions (Deno) for AI calls |
+Here is the complete consolidated tech stack in one section for easy copying:
 
-### 3.3 AI/ML Layer
-| Component | Technology |
-|---|---|
-| Difficulty Adaptation | Rule-based scoring engine (Phase 1) → Claude API / OpenAI (Phase 2) |
-| Voice Interaction | Web Speech API + custom vocabulary |
-| Cognitive Score Computation | Supabase Edge Function |
-| Anomaly Detection | Rolling average deviation (server-side) |
-
-### 3.4 Mobile
-| Layer | Technology |
-|---|---|
-| Native Wrapper | Capacitor 6 |
-| Platform | Android (minSDK 26 / Android 8+) |
-| Android Fullscreen | DISABLED — Status bar + nav buttons always visible |
-| Plugins | @capacitor/status-bar, @capacitor/local-notifications, @capacitor/network, @capacitor/splash-screen |
-| Build | Android Studio / Gradle |
-
-### 3.5 Deployment
-| Target | Platform |
-|---|---|
-| Web | Vercel (production + preview deployments) |
-| Android APK | GitHub Actions CI → signed APK release |
-| DB/Auth/Storage | Supabase cloud (free/pro tier) |
-| CI/CD | GitHub Actions |
+| Domain | Component | Technology | Notes |
+|---|---|---|---|
+| **Frontend** | UI Framework | React 18 + Vite | — |
+| **Frontend** | Styling | Tailwind CSS | — |
+| **Frontend** | UI Components (Admin) | shadcn/ui | Pre-built accessible components for admin panel |
+| **Frontend** | UI Components (Patient) | Custom Tailwind primitives | Fully custom — elderly UX requires bespoke sizing |
+| **Frontend** | Server State Management | **TanStack Query (React Query)** | Handles all Supabase data fetching, caching, background sync |
+| **Frontend** | UI State Management | Zustand *(UI only)* | Modal states, language selection, theme |
+| **Frontend** | Routing | React Router v6 | — |
+| **Frontend** | Code Splitting | React.lazy() + Suspense | Per-route and per-game-module lazy loading |
+| **Frontend** | Offline Storage | IndexedDB via Dexie.js | — |
+| **Frontend** | PWA / Service Worker | vite-plugin-pwa + **Workbox** | Workbox configured with CacheFirst for assets |
+| **Frontend** | Voice API | Web Speech API | Custom NER language pack integration |
+| **Frontend** | Animations | Framer Motion | Page transitions, card flips, modal animations |
+| **Frontend** | Game Rendering | **react-konva** | Smooth 60fps canvas rendering for games |
+| **Frontend** | Forms | React Hook Form + Zod | — |
+| **Backend** | Backend Platform | Supabase | Full Backend-as-a-Service |
+| **Database** | Database | PostgreSQL (via Supabase) | Handles all structured data and relations |
+| **Backend** | Authentication | Supabase Auth | Email + password |
+| **Backend** | File Storage | Supabase Storage | Voice recordings and media assets |
+| **Backend** | Realtime | Supabase Realtime | Caregiver push alerts and live sync |
+| **Backend** | Edge Functions | Supabase Edge Functions (Deno) | AI calls and heavy cognitive score computation |
+| **AI/ML** | Difficulty Adaptation | Rule-based engine → Claude API | Phase 1 rule-based, Phase 2 AI-driven |
+| **Mobile** | Native Wrapper | Capacitor 6 | Android (minSDK 26 / Android 8+) |
+| **Deployment**| Hosting | Vercel (Web), Supabase (DB) | CI/CD via GitHub Actions |
 
 ### 3.6 Framework Decision Rationale
 
