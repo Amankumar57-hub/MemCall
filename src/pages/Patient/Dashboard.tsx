@@ -19,6 +19,7 @@ export default function PatientDashboard() {
   const [completedTaskIds, setCompletedTaskIds] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [patientName, setPatientName] = useState('Patient')
+  const [patientId, setPatientId] = useState<string | null>(null)
   const navigate = useNavigate()
   
   const { language, setLanguage } = useAppStore()
@@ -67,6 +68,7 @@ export default function PatientDashboard() {
       setLoading(true)
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
+      setPatientId(user.id)
 
       // Fetch Profile
       const { data: profile } = await supabase
@@ -106,6 +108,34 @@ export default function PatientDashboard() {
       setLoading(false)
     }
   }
+
+  // Set up Realtime listener for reminders
+  useEffect(() => {
+    if (!patientId) return
+
+    const channel = supabase
+      .channel(`dashboard_reminders:patient_id=${patientId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'reminders',
+          filter: `patient_id=eq.${patientId}`
+        },
+        (_payload) => {
+          // If any reminder changes, reload the dashboard data
+          loadDashboardData()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [patientId])
+
+
 
   const getGreeting = () => {
     const hour = currentTime.getHours()

@@ -22,6 +22,7 @@ export default function CaregiverDashboard() {
   const [caregiverId, setCaregiverId] = useState<string | null>(null)
   const [patient, setPatient] = useState<PatientDetails | null>(null)
   const [gameSessions, setGameSessions] = useState<GameSession[]>([])
+  const [_alerts, setAlerts] = useState<any[]>([])
   
   const [loading, setLoading] = useState(true)
   const [showAddModal, setShowAddModal] = useState(false)
@@ -92,6 +93,33 @@ export default function CaregiverDashboard() {
       setLoading(false)
     }
   }
+
+  // Set up Realtime listener for alerts
+  useEffect(() => {
+    if (!caregiverId) return
+
+    const channel = supabase
+      .channel(`alerts:caregiver_id=${caregiverId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'alerts',
+          filter: `caregiver_id=eq.${caregiverId}`
+        },
+        (payload) => {
+          setAlerts((current) => [payload.new, ...current])
+          // In a real app we might also show a toast notification here
+          alert(`New Alert: ${payload.new.message}`)
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [caregiverId])
 
   const handleLinkPatient = async (e: React.FormEvent) => {
     e.preventDefault()

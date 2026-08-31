@@ -14,6 +14,7 @@ interface Reminder {
 export default function ReminderList() {
   const [reminders, setReminders] = useState<Reminder[]>([])
   const [loading, setLoading] = useState(true)
+  const [patientId, setPatientId] = useState<string | null>(null)
 
   useEffect(() => {
     loadReminders()
@@ -24,6 +25,7 @@ export default function ReminderList() {
       setLoading(true)
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
+      setPatientId(user.id)
 
       const { data } = await supabase
         .from('reminders')
@@ -39,6 +41,31 @@ export default function ReminderList() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    if (!patientId) return
+
+    const channel = supabase
+      .channel(`reminders:patient_id=${patientId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'reminders',
+          filter: `patient_id=eq.${patientId}`
+        },
+        (_payload) => {
+          // If any reminder is inserted, updated, or deleted, reload the list
+          loadReminders()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [patientId])
 
   const getIconForType = (type: string) => {
     switch (type) {
