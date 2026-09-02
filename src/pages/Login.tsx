@@ -41,8 +41,12 @@ export default function Login() {
           navigate('/patient')
         }
       }
-    } catch (err: any) {
-      setError(err.message || 'Failed to login')
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message || 'Failed to login')
+      } else {
+        setError('Failed to login')
+      }
     } finally {
       setLoading(false)
     }
@@ -111,7 +115,12 @@ export default function Login() {
               <button 
                 type="button"
                 onClick={async () => {
-                  await supabase.auth.signInWithOAuth({ provider: 'google' });
+                  await supabase.auth.signInWithOAuth({ 
+                    provider: 'google',
+                    options: {
+                      redirectTo: window.location.origin
+                    }
+                  });
                 }}
                 className="w-full bg-input/50 border border-border text-foreground font-bold rounded-xl py-3.5 flex items-center justify-center gap-3 hover:bg-input transition-colors shadow-sm"
               >

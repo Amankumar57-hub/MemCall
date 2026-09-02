@@ -5,11 +5,18 @@ import { Capacitor } from '@capacitor/core'
 import { StatusBar, Style } from '@capacitor/status-bar'
 import { useAppStore } from './store/useAppStore'
 import { supabase } from './lib/supabase'
+import Landing from './pages/Landing'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
+import Onboarding from './pages/Onboarding'
+import Demo from './pages/Demo'
 import PatientDashboard from './pages/Patient/Dashboard'
 import GameList from './pages/Patient/Games/GameList'
 import MemoryMatch from './pages/Patient/Games/MemoryMatch'
+import ShapeTracer from './pages/Patient/Games/ShapeTracer'
+import SoundRecognition from './pages/Patient/Games/SoundRecognition'
+import FamilyQuiz from './pages/Patient/Games/FamilyQuiz'
+import MemoryGarden from './pages/Patient/Games/MemoryGarden'
 import ReminderList from './pages/Patient/Reminders/ReminderList'
 import WaterReminder from './pages/Patient/Reminders/WaterReminder'
 import PatientProfile from './pages/Patient/Profile'
@@ -24,8 +31,17 @@ import type { Session } from '@supabase/supabase-js'
 const queryClient = new QueryClient()
 
 function ProtectedRoute({ children, session }: { children: React.ReactNode, session: Session | null }) {
+  const isDemo = localStorage.getItem('demo_mode') === 'true'
+  if (isDemo) {
+    return <>{children}</>
+  }
+  
   if (!session) {
     return <Navigate to="/login" replace />
+  }
+  const isSetup = localStorage.getItem('onboarding_complete') === 'true' || session.user.user_metadata?.onboarding_complete
+  if (!isSetup) {
+    return <Navigate to="/onboarding" replace />
   }
   return <>{children}</>
 }
@@ -40,6 +56,17 @@ function App() {
       setSession(session)
       setLoading(false)
     })
+
+    // Check for OAuth errors in URL
+    const hashParams = new URLSearchParams(window.location.hash.substring(1))
+    const searchParams = new URLSearchParams(window.location.search)
+    const errorDescription = hashParams.get('error_description') || searchParams.get('error_description')
+    
+    if (errorDescription) {
+      alert(`Authentication Error: ${errorDescription.replace(/\+/g, ' ')}`)
+      window.location.hash = ''
+      // Optionally clear search params but this requires history API
+    }
 
     const {
       data: { subscription },
@@ -85,14 +112,20 @@ function App() {
       <BrowserRouter>
         <div className="min-h-screen bg-background text-foreground transition-colors duration-300 font-sans">
           <Routes>
-            <Route path="/" element={session ? <Navigate to="/patient" replace /> : <Navigate to="/login" replace />} />
+            <Route path="/" element={session ? <Navigate to="/patient" replace /> : <Landing />} />
             
             <Route path="/login" element={session ? <Navigate to="/" replace /> : <Login />} />
             <Route path="/signup" element={session ? <Navigate to="/" replace /> : <Signup />} />
+            <Route path="/demo" element={<Demo />} />
+            <Route path="/onboarding" element={session ? <Onboarding /> : <Navigate to="/login" replace />} />
             
             <Route path="/patient" element={<ProtectedRoute session={session}><PatientDashboard /></ProtectedRoute>} />
             <Route path="/patient/games" element={<ProtectedRoute session={session}><GameList /></ProtectedRoute>} />
             <Route path="/patient/games/memory" element={<ProtectedRoute session={session}><MemoryMatch /></ProtectedRoute>} />
+            <Route path="/patient/games/shape-tracer" element={<ProtectedRoute session={session}><ShapeTracer /></ProtectedRoute>} />
+            <Route path="/patient/games/sound-recognition" element={<ProtectedRoute session={session}><SoundRecognition /></ProtectedRoute>} />
+            <Route path="/patient/games/family-quiz" element={<ProtectedRoute session={session}><FamilyQuiz /></ProtectedRoute>} />
+            <Route path="/patient/games/memory-garden" element={<ProtectedRoute session={session}><MemoryGarden /></ProtectedRoute>} />
             <Route path="/patient/reminders" element={<ProtectedRoute session={session}><ReminderList /></ProtectedRoute>} />
             <Route path="/patient/reminders/water" element={<ProtectedRoute session={session}><WaterReminder /></ProtectedRoute>} />
             <Route path="/patient/profile" element={<ProtectedRoute session={session}><PatientProfile /></ProtectedRoute>} />

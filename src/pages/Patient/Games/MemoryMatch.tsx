@@ -2,9 +2,13 @@ import { useState, useEffect } from 'react'
 import { Stage, Layer, Rect, Text, Group } from 'react-konva'
 import { ArrowLeft, RefreshCcw } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { playClickSound } from '../../../lib/audio'
 import { supabase } from '../../../lib/supabase'
+import { useAppStore } from '../../../store/useAppStore'
+import { t } from '../../../lib/i18n'
+import { playPremiumVoice } from '../../../lib/tts'
 
-const EMOJIS = ['🪘', '🐘', '🦏', '☕', '🍛', '🎋', '🐅', '🚣']
+const ALL_EMOJIS = ['🪘', '🐘', '🦏', '☕', '🍛', '🎋', '🐅', '🚣', '🌸', '🌞', '🥥', '🥭', '🦚', '🛕', '🪔', '🪁', '🕌', '👳']
 
 interface Card {
   id: number
@@ -13,7 +17,38 @@ interface Card {
   isMatched: boolean
 }
 
+const MEMORY_MATCH_LEVELS = [
+  { level: 1, pairs: 2, cols: 2 },
+  { level: 2, pairs: 3, cols: 3 },
+  { level: 3, pairs: 4, cols: 4 },
+  { level: 4, pairs: 5, cols: 5 },
+  { level: 5, pairs: 6, cols: 4 },
+  { level: 6, pairs: 6, cols: 4 },
+  { level: 7, pairs: 8, cols: 4 },
+  { level: 8, pairs: 8, cols: 4 },
+  { level: 9, pairs: 10, cols: 5 },
+  { level: 10, pairs: 10, cols: 5 },
+  { level: 11, pairs: 12, cols: 6 },
+  { level: 12, pairs: 12, cols: 6 },
+  { level: 13, pairs: 15, cols: 6 },
+  { level: 14, pairs: 15, cols: 6 },
+  { level: 15, pairs: 18, cols: 6 },
+  { level: 16, pairs: 18, cols: 6 },
+  { level: 17, pairs: 18, cols: 6 },
+  { level: 18, pairs: 18, cols: 6 },
+  { level: 19, pairs: 18, cols: 6 },
+  { level: 20, pairs: 18, cols: 6 },
+  { level: 21, pairs: 18, cols: 6 },
+  { level: 22, pairs: 18, cols: 6 },
+  { level: 23, pairs: 18, cols: 6 },
+  { level: 24, pairs: 18, cols: 6 },
+  { level: 25, pairs: 18, cols: 6 },
+]
+
 export default function MemoryMatch() {
+  const { language } = useAppStore()
+  
+  const [currentLevel, setCurrentLevel] = useState(0)
   const [cards, setCards] = useState<Card[]>([])
   const [flippedIndices, setFlippedIndices] = useState<number[]>([])
   const [matches, setMatches] = useState(0)
@@ -21,16 +56,34 @@ export default function MemoryMatch() {
   const [startTime, setStartTime] = useState<number | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [gameSaved, setGameSaved] = useState(false)
+  const [levelConfig, setLevelConfig] = useState(MEMORY_MATCH_LEVELS[0])
 
   useEffect(() => {
+    // Load saved level from localStorage
+    const savedLevel = localStorage.getItem('memory_match_level')
+    if (savedLevel) {
+      const parsed = parseInt(savedLevel)
+      if (!isNaN(parsed) && parsed >= 0 && parsed < 25) {
+        setCurrentLevel(parsed)
+      }
+    }
+    
     const handleResize = () => setWindowWidth(window.innerWidth)
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
+  useEffect(() => {
+    setLevelConfig(MEMORY_MATCH_LEVELS[currentLevel])
+  }, [currentLevel])
+
   const initializeGame = () => {
-    // Basic 4x4 grid (8 pairs)
-    const deck = [...EMOJIS, ...EMOJIS]
+    const config = MEMORY_MATCH_LEVELS[currentLevel]
+    
+    // Select subset of emojis for this level
+    const levelEmojis = ALL_EMOJIS.slice(0, config.pairs)
+    
+    const deck = [...levelEmojis, ...levelEmojis]
       .sort(() => Math.random() - 0.5)
       .map((emoji, idx) => ({
         id: idx,
@@ -38,6 +91,7 @@ export default function MemoryMatch() {
         isFlipped: false,
         isMatched: false,
       }))
+    
     setCards(deck)
     setFlippedIndices([])
     setMatches(0)
@@ -46,59 +100,68 @@ export default function MemoryMatch() {
   }
 
   useEffect(() => {
-    initializeGame()
-  }, [])
+    if (levelConfig) {
+      initializeGame()
+    }
+  }, [levelConfig]) // Re-initialize when level config changes
 
   const handleGameComplete = async () => {
     if (!startTime || isSaving || gameSaved) return
     setIsSaving(true)
     
+    // Announce completion
+    playPremiumVoice(t('Well Done!', language), language)
+    
     try {
       const durationSeconds = Math.floor((Date.now() - startTime) / 1000)
-      const score = Math.max(0, 100 - (durationSeconds * 0.5)) // Simple score calculation
+      const score = Math.max(0, 100 - (durationSeconds * 0.5))
       
       const { data: userData } = await supabase.auth.getUser()
-      if (!userData.user) throw new Error("Not logged in")
-      
-      // Get Game ID (assume known for offline, or fetch if online)
-      let gameId = 'memory-match-uuid-placeholder';
-      if (navigator.onLine) {
-        const { data: gameData } = await supabase
-          .from('games')
-          .select('id')
-          .eq('slug', 'memory-match')
-          .single()
-        if (gameData) gameId = gameData.id;
-      }
+      if (userData.user) {
+        let gameId = 'memory-match-uuid-placeholder';
+        if (navigator.onLine) {
+          const { data: gameData } = await supabase
+            .from('games')
+            .select('id')
+            .eq('slug', 'memory-match')
+            .single()
+          if (gameData) gameId = gameData.id;
+        }
 
-      const payload = {
-        patient_id: userData.user.id,
-        game_id: gameId,
-        difficulty_level: 2,
-        score: score,
-        questions_attempted: 8,
-        questions_correct: 8,
-        hints_used: 0,
-        duration_seconds: durationSeconds,
-        completed: true
-      };
-        
-      if (navigator.onLine) {
-        await supabase.from('game_sessions').insert(payload)
-      } else {
-        // Save to offline sync queue
-        const { db } = await import('../../../lib/db');
-        await db.sync_queue.add({
-          table_name: 'game_sessions',
-          operation: 'INSERT',
-          payload: payload,
-          created_at: new Date().toISOString(),
-          status: 'pending'
-        });
-        console.log("Saved offline to sync queue");
+        const payload = {
+          patient_id: userData.user.id,
+          game_id: gameId,
+          difficulty_level: currentLevel + 1,
+          score: score,
+          questions_attempted: levelConfig.pairs,
+          questions_correct: levelConfig.pairs,
+          hints_used: 0,
+          duration_seconds: durationSeconds,
+          completed: true
+        };
+          
+        if (navigator.onLine) {
+          await supabase.from('game_sessions').insert(payload)
+        } else {
+          const { db } = await import('../../../lib/db');
+          await db.sync_queue.add({
+            table_name: 'game_sessions',
+            operation: 'INSERT',
+            payload: payload,
+            created_at: new Date().toISOString(),
+            status: 'pending'
+          });
+        }
       }
       
       setGameSaved(true)
+      
+      // Advance level
+      if (currentLevel < 24) {
+        const nextLevel = currentLevel + 1
+        setCurrentLevel(nextLevel)
+        localStorage.setItem('memory_match_level', nextLevel.toString())
+      }
     } catch (error) {
       console.error("Error saving game session:", error)
     } finally {
@@ -107,12 +170,13 @@ export default function MemoryMatch() {
   }
 
   useEffect(() => {
-    if (matches === EMOJIS.length && !isSaving && !gameSaved) {
+    if (matches > 0 && matches === levelConfig.pairs && !isSaving && !gameSaved) {
       handleGameComplete()
     }
-  }, [matches, isSaving, gameSaved])
+  }, [matches, isSaving, gameSaved, levelConfig])
 
   const handleCardClick = (index: number) => {
+    playClickSound()
     if (cards[index].isFlipped || cards[index].isMatched || flippedIndices.length === 2) {
       return
     }
@@ -128,7 +192,6 @@ export default function MemoryMatch() {
       const [firstIdx, secondIdx] = newFlipped
       
       if (newCards[firstIdx].emoji === newCards[secondIdx].emoji) {
-        // Match!
         setTimeout(() => {
           const matchedCards = [...newCards]
           matchedCards[firstIdx].isMatched = true
@@ -138,7 +201,6 @@ export default function MemoryMatch() {
           setMatches(m => m + 1)
         }, 500)
       } else {
-        // No match
         setTimeout(() => {
           const resetCards = [...newCards]
           resetCards[firstIdx].isFlipped = false
@@ -150,11 +212,15 @@ export default function MemoryMatch() {
     }
   }
 
-  // Calculate canvas size
   const padding = 20
   const maxStageWidth = Math.min(windowWidth - padding * 2, 500)
-  const cols = 4
+  const cols = levelConfig.cols
+  const rows = Math.ceil((levelConfig.pairs * 2) / cols)
+  
+  // Calculate card size so it fits horizontally
   const cardSize = (maxStageWidth - (cols - 1) * 10) / cols
+  // Calculate required height based on rows
+  const stageHeight = (cardSize * rows) + ((rows - 1) * 10) + 10
 
   return (
     <div className="flex flex-col min-h-screen bg-[#FDFDF9]">
@@ -162,23 +228,28 @@ export default function MemoryMatch() {
         <Link to="/patient/games" className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors text-[#144533]">
           <ArrowLeft size={24} />
         </Link>
-        <h1 className="text-2xl font-bold text-[#144533]">Memory Match</h1>
+        <div className="flex flex-col items-center">
+          <h1 className="text-xl font-bold text-[#144533]">{t('Memory Match', language)}</h1>
+          <span className="text-xs font-bold bg-[#E1F4EA] text-[#1B4D3E] px-2 py-0.5 rounded-full">
+            Level {currentLevel + 1}/25
+          </span>
+        </div>
         <button onClick={initializeGame} className="p-2 text-[#144533] hover:bg-gray-100 rounded-full transition-colors">
           <RefreshCcw size={24} />
         </button>
       </header>
 
       <main className="flex-1 flex flex-col items-center justify-center p-4">
-        {matches === EMOJIS.length ? (
+        {matches > 0 && matches === levelConfig.pairs ? (
           <div className="text-center bg-white p-8 rounded-3xl shadow-sm border border-gray-100 max-w-sm w-full animate-in zoom-in duration-500">
-            <h2 className="text-4xl font-bold text-[#144533] mb-4">Well Done! 🎉</h2>
-            <p className="text-lg text-gray-600 mb-2">You found all the matches.</p>
+            <h2 className="text-4xl font-bold text-[#144533] mb-4">{t('Well Done!', language)} 🎉</h2>
+            <p className="text-lg text-gray-600 mb-2">{t('You found all the matches.', language)}</p>
             {isSaving ? (
-              <p className="text-sm text-gray-400 mb-8 italic">Saving progress...</p>
+              <p className="text-sm text-gray-400 mb-8 italic">{t('Saving progress...', language)}</p>
             ) : gameSaved ? (
               <p className="text-sm text-green-600 font-bold mb-8 flex items-center justify-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-green-500 inline-block"></span>
-                Progress Saved
+                {t('Progress Saved', language)}
               </p>
             ) : (
               <div className="mb-8"></div>
@@ -187,20 +258,20 @@ export default function MemoryMatch() {
               onClick={initializeGame}
               className="w-full bg-[#1B4D3E] text-white px-8 py-4 rounded-full text-xl font-bold hover:bg-[#13382D] transition-colors shadow-md active:scale-[0.98]"
             >
-              Play Again
+              {currentLevel < 24 ? t('Next Level', language) : t('Play Again', language)}
             </button>
             <Link to="/patient/games" className="block mt-4 text-[#144533] font-bold hover:underline">
-              Back to Games
+              {t('Back to Games', language)}
             </Link>
           </div>
         ) : (
           <div className="w-full flex flex-col items-center">
             <div className="text-center mb-6 text-xl font-bold text-[#144533] bg-white px-6 py-2 rounded-full shadow-sm border border-gray-100">
-              Matches: {matches} / {EMOJIS.length}
+              {t('Matches', language)}: {matches} / {levelConfig.pairs}
             </div>
             
             <div className="border border-gray-100 rounded-3xl overflow-hidden shadow-sm bg-white p-2">
-              <Stage width={maxStageWidth} height={maxStageWidth + 10}>
+              <Stage width={maxStageWidth} height={stageHeight}>
                 <Layer>
                   {cards.map((card, i) => {
                     const col = i % cols
@@ -219,7 +290,7 @@ export default function MemoryMatch() {
                           fill={card.isMatched ? '#E1F4EA' : card.isFlipped ? '#FDFDF9' : '#144533'}
                           stroke={card.isFlipped || card.isMatched ? '#E2E8F0' : undefined}
                           strokeWidth={2}
-                          cornerRadius={16}
+                          cornerRadius={8}
                           shadowColor={!card.isMatched ? "rgba(0,0,0,0.15)" : "transparent"}
                           shadowBlur={card.isFlipped ? 8 : 4}
                           shadowOffset={!card.isMatched ? { x: 0, y: 2 } : { x: 0, y: 0 }}
@@ -248,7 +319,7 @@ export default function MemoryMatch() {
               </Stage>
             </div>
             <p className="mt-8 text-center text-gray-500 font-medium max-w-xs">
-              Tap any two cards to reveal them and find matching pairs.
+              {t('Tap any two cards to reveal them and find matching pairs.', language)}
             </p>
           </div>
         )}

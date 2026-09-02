@@ -30,7 +30,7 @@ serve(async (req) => {
     
     // In production, we'd verify the JWT. 
     // Here we're using the admin client to bulk insert safely.
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('game_sessions')
       .upsert(sessions, { onConflict: 'id' }) // Prevent duplicates if same session sent twice
       

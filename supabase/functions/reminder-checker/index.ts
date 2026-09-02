@@ -1,7 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { getSupabaseAdmin } from "../_shared/supabase.ts"
 
-serve(async (req) => {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+serve(async (_req) => {
   try {
     const supabase = getSupabaseAdmin()
     

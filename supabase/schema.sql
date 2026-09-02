@@ -189,12 +189,22 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.reminders;
 -- 6. Trigger to automatically create `users` row on Auth Signup
 CREATE OR REPLACE FUNCTION public.handle_new_user() 
 RETURNS trigger AS $$
+DECLARE
+  v_user_id uuid;
 BEGIN
-  INSERT INTO public.users (id, full_name, role)
-  VALUES (new.id, new.raw_user_meta_data->>'full_name', COALESCE((new.raw_user_meta_data->>'role')::user_role, 'patient'));
+  INSERT INTO public.users (auth_id, full_name, email, role)
+  VALUES (
+    new.id, 
+    COALESCE(new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'name', 'User'), 
+    new.email,
+    COALESCE(new.raw_user_meta_data->>'role', 'patient')
+  )
+  ON CONFLICT (email) DO UPDATE SET auth_id = EXCLUDED.auth_id
+  RETURNING id INTO v_user_id;
   
-  IF (new.raw_user_meta_data->>'role' = 'patient' OR new.raw_user_meta_data->>'role' IS NULL) THEN
-    INSERT INTO public.patient_profiles (user_id) VALUES (new.id);
+  IF (COALESCE(new.raw_user_meta_data->>'role', 'patient') = 'patient') THEN
+    INSERT INTO public.patient_profiles (user_id) VALUES (v_user_id)
+    ON CONFLICT (user_id) DO NOTHING;
   END IF;
   
   RETURN new;

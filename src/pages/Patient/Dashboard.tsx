@@ -5,7 +5,8 @@ import { supabase } from '../../lib/supabase'
 import { useVoiceCommand } from '../../hooks/useVoiceCommand'
 import { useAppStore } from '../../store/useAppStore'
 import { useSync } from '../../hooks/useSync'
-
+import { t } from '../../lib/i18n'
+import { playPremiumVoice } from '../../lib/tts'
 interface Reminder {
   id: string
   title: string
@@ -20,6 +21,7 @@ export default function PatientDashboard() {
   const [loading, setLoading] = useState(true)
   const [patientName, setPatientName] = useState('Patient')
   const [patientId, setPatientId] = useState<string | null>(null)
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const navigate = useNavigate()
   
   const { language, setLanguage } = useAppStore()
@@ -66,18 +68,31 @@ export default function PatientDashboard() {
   const loadDashboardData = async () => {
     try {
       setLoading(true)
+      
+      if (localStorage.getItem('demo_mode') === 'true') {
+        setPatientName('Demo Patient')
+        setLoading(false)
+        return
+      }
+
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-      setPatientId(user.id)
 
       // Fetch Profile
       const { data: profile } = await supabase
         .from('users')
-        .select('full_name')
-        .eq('id', user.id)
+        .select('id, full_name')
+        .eq('auth_id', user.id)
         .single()
       
-      if (profile) setPatientName(profile.full_name.split(' ')[0]) // Get first name
+      if (profile) {
+        setPatientId(profile.id)
+        setPatientName(profile.full_name.split(' ')[0]) // Get first name
+      }
+      
+      if (user.user_metadata?.avatar_url) {
+        setAvatarUrl(user.user_metadata.avatar_url)
+      }
 
       // Fetch Reminders
       const { data: userReminders } = await supabase
@@ -139,15 +154,10 @@ export default function PatientDashboard() {
 
   const getGreeting = () => {
     const hour = currentTime.getHours()
-    if (language === 'hi') {
-      if (hour < 12) return 'सुप्रभात'
-      if (hour < 18) return 'शुभ दोपहर'
-      return 'शुभ संध्या'
-    } else {
-      if (hour < 12) return 'Good Morning'
-      if (hour < 18) return 'Good Afternoon'
-      return 'Good Evening'
-    }
+    
+    if (hour < 12) return t('Good Morning', language)
+    if (hour < 18) return t('Good Afternoon', language)
+    return t('Good Evening', language)
   }
 
   const toggleTask = async (id: string, time: string) => {
@@ -185,13 +195,7 @@ export default function PatientDashboard() {
   }
 
   const readAloud = (text: string) => {
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel() // Cancel any ongoing speech
-      const utterance = new SpeechSynthesisUtterance(text)
-      utterance.rate = 0.9; // Slightly slower for elderly
-      utterance.pitch = 1;
-      window.speechSynthesis.speak(utterance)
-    }
+    playPremiumVoice(text, language)
   }
 
   if (loading) {
@@ -207,10 +211,10 @@ export default function PatientDashboard() {
         <div className="flex items-center gap-6">
           <h1 className="text-2xl font-bold text-[#144533]">MemCall</h1>
           <nav className="hidden md:flex gap-6 text-sm font-semibold text-gray-500">
-            <Link to="/patient" className="text-[#144533] border-b-2 border-[#144533] pb-1">Today</Link>
-            <Link to="/patient/games" className="hover:text-[#144533] transition-colors pb-1">Games</Link>
-            <Link to="/patient/reminders" className="hover:text-[#144533] transition-colors pb-1">Reminders</Link>
-            <Link to="/patient/profile" className="hover:text-[#144533] transition-colors pb-1">Profile</Link>
+            <Link to="/patient" className="text-[#144533] border-b-2 border-[#144533] pb-1">{t('Today', language)}</Link>
+            <Link to="/patient/games" className="hover:text-[#144533] transition-colors pb-1">{t('Games', language)}</Link>
+            <Link to="/patient/reminders" className="hover:text-[#144533] transition-colors pb-1">{t('Reminders', language)}</Link>
+            <Link to="/patient/profile" className="hover:text-[#144533] transition-colors pb-1">{t('Profile', language)}</Link>
           </nav>
         </div>
         <div className="flex items-center gap-4 text-[#144533]">
@@ -226,11 +230,11 @@ export default function PatientDashboard() {
           </div>
           
           <button 
-            onClick={() => setLanguage(language === 'en' ? 'hi' : 'en')}
+            onClick={() => setLanguage(language === 'en' ? 'hi' : language === 'hi' ? 'mr' : 'en')}
             className="p-2 hover:bg-gray-100 rounded-full flex items-center gap-1 font-bold text-sm"
           >
             <Globe size={20} />
-            {language === 'en' ? 'EN' : 'HI'}
+            {language.toUpperCase()}
           </button>
           <button className="p-2 hover:bg-gray-100 rounded-full" onClick={() => readAloud("You have " + (reminders.length - completedTaskIds.size) + " reminders left today.")}><Bell size={24} /></button>
           <button className="p-2 hover:bg-gray-100 rounded-full"><User size={24} /></button>
@@ -240,11 +244,48 @@ export default function PatientDashboard() {
 
       <main className="flex-1 p-6 md:p-10 max-w-5xl mx-auto w-full">
         {/* Greeting */}
-        <div className="mb-8">
-          <h2 className="text-3xl font-bold text-gray-800">{getGreeting()}, {patientName}</h2>
-          <p className="text-gray-500 font-medium mt-1">
-            {currentTime.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })} • {currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-          </p>
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h2 className="text-3xl font-bold text-gray-800">{getGreeting()}, {patientName}</h2>
+            <p className="text-gray-500 font-medium mt-1">
+              {currentTime.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })} • {currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+            </p>
+          </div>
+          <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-white shadow-sm bg-gray-200 shrink-0">
+             <img src={avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${patientName}`} alt="Profile" className="w-full h-full object-cover" />
+          </div>
+        </div>
+
+        {/* Mood Selector */}
+        <div className="mb-10">
+          <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+            <span className="w-2 h-6 bg-[#1B4D3E] rounded-full inline-block"></span>
+            {t('How do you feel today?', language)}
+          </h3>
+          <div className="flex gap-4 overflow-x-auto pb-2 hide-scrollbar">
+            {['Angry', 'Sad', 'Calm', 'Happy'].map(mood => {
+              const emoji = mood === 'Angry' ? '😡' : mood === 'Sad' ? '😢' : mood === 'Calm' ? '😌' : '😊'
+              const bg = mood === 'Angry' ? 'bg-[#F17355]' : mood === 'Sad' ? 'bg-[#FCD863]' : mood === 'Calm' ? 'bg-[#FFCB5B]' : 'bg-[#A4C4A8]'
+              const border = mood === 'Angry' ? 'border-[#F17355]' : mood === 'Sad' ? 'border-[#FCD863]' : mood === 'Calm' ? 'border-[#FFCB5B]' : 'border-[#A4C4A8]'
+              const localizedMood = t(mood, language)
+
+              return (
+                <button 
+                  key={mood}
+                  onClick={() => {
+                    const msg = language === 'hi' ? `मैंने दर्ज किया है कि आप ${localizedMood} महसूस कर रहे हैं।` : language === 'mr' ? `मी नोंदवले आहे की तुम्हाला ${localizedMood} वाटत आहे.` : `I have noted that you are feeling ${localizedMood}.`
+                    readAloud(msg)
+                  }}
+                  className={`flex flex-col items-center justify-center p-4 bg-white rounded-3xl min-w-[100px] shadow-sm border-2 transition-all hover:${border}`}
+                >
+                  <div className={`w-14 h-14 rounded-full ${bg} flex items-center justify-center mb-3 text-white`}>
+                    <span className="text-3xl">{emoji}</span>
+                  </div>
+                  <span className="text-gray-700 font-medium">{localizedMood}</span>
+                </button>
+              )
+            })}
+          </div>
         </div>
 
         {/* Big Voice Button */}
@@ -273,7 +314,7 @@ export default function PatientDashboard() {
           <section>
             <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
               <span className="w-2 h-6 bg-[#1B4D3E] rounded-full inline-block"></span>
-              Today's Tasks
+              {t("Today's Tasks", language)}
             </h3>
             
             {reminders.length === 0 ? (
@@ -323,7 +364,7 @@ export default function PatientDashboard() {
           <section>
             <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
               <span className="w-2 h-6 bg-[#1B4D3E] rounded-full inline-block"></span>
-              Play & Exercise
+              {t('Play & Exercise', language)}
             </h3>
             <div className="grid grid-cols-2 gap-4">
               <Link to="/patient/games/memory" className="bg-[#FCEBD7] rounded-2xl p-6 flex flex-col items-center justify-center text-center shadow-sm hover:shadow-md transition-shadow active:scale-[0.98] border border-[#F5D8BA]">
@@ -366,19 +407,19 @@ export default function PatientDashboard() {
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-6 py-4 flex justify-between z-50">
         <Link to="/patient" className="flex flex-col items-center text-[#1B4D3E]">
           <div className="p-1"><CheckCircle2 size={24} /></div>
-          <span className="text-xs font-bold mt-1">Today</span>
+          <span className="text-xs font-bold mt-1">{t('Today', language)}</span>
         </Link>
         <Link to="/patient/games" className="flex flex-col items-center text-gray-400">
           <div className="p-1"><LayoutGrid size={24} /></div>
-          <span className="text-xs font-medium mt-1">Games</span>
+          <span className="text-xs font-medium mt-1">{t('Games', language)}</span>
         </Link>
         <Link to="/patient/reminders" className="flex flex-col items-center text-gray-400">
           <div className="p-1"><Bell size={24} /></div>
-          <span className="text-xs font-medium mt-1">Alerts</span>
+          <span className="text-xs font-medium mt-1">{t('Alerts', language)}</span>
         </Link>
         <Link to="/patient/profile" className="flex flex-col items-center text-gray-400">
           <div className="p-1"><User size={24} /></div>
-          <span className="text-xs font-medium mt-1">Profile</span>
+          <span className="text-xs font-medium mt-1">{t('Profile', language)}</span>
         </Link>
       </nav>
     </div>

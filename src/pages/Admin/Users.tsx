@@ -11,20 +11,31 @@ export default function AdminUsers() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
 
+  const fetchUsers = async () => {
+    setLoading(true)
+    // Fetch users. Note: language_preference is in patient_profiles
+    const { data } = await supabase
+      .from('users')
+      .select('*, patient_profiles(language_preference)')
+      .order('created_at', { ascending: false })
+    
+    if (data) {
+      // Map the nested language_preference out for the UI
+      const formattedData = data.map(u => ({
+        ...u,
+        language_preference: u.patient_profiles?.[0]?.language_preference || 'en'
+      }))
+      setUsers(formattedData)
+    }
+    setLoading(false)
+  }
+
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchUsers()
   }, [])
 
-  const fetchUsers = async () => {
-    setLoading(true)
-    const { data } = await supabase
-      .from('users')
-      .select('*')
-      .order('created_at', { ascending: false })
-    
-    if (data) setUsers(data)
-    setLoading(false)
-  }
+
 
   const toggleSuspend = async (id: string, currentStatus: boolean) => {
     const { error } = await supabase

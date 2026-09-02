@@ -8,7 +8,7 @@ declare global {
   }
 }
 
-export function useVoiceCommand() {
+export function useVoiceCommand(lang: string = 'en-US') {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -23,7 +23,7 @@ export function useVoiceCommand() {
     }
 
     const recognition = new SpeechRecognition();
-    recognition.lang = 'en-US'; // Defaulting to English for MVP, can be dynamic
+    recognition.lang = lang;
     recognition.continuous = false;
     recognition.interimResults = false;
 

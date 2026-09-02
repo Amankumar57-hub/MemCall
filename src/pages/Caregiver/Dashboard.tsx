@@ -22,21 +22,34 @@ export default function CaregiverDashboard() {
   const [caregiverId, setCaregiverId] = useState<string | null>(null)
   const [patient, setPatient] = useState<PatientDetails | null>(null)
   const [gameSessions, setGameSessions] = useState<GameSession[]>([])
-  const [_alerts, setAlerts] = useState<any[]>([])
   
   const [loading, setLoading] = useState(true)
   const [showAddModal, setShowAddModal] = useState(false)
   const [linkInput, setLinkInput] = useState('')
   const [linkError, setLinkError] = useState('')
   const [isLinking, setIsLinking] = useState(false)
-
-  useEffect(() => {
-    loadDashboardData()
-  }, [])
+  const [showReminderModal, setShowReminderModal] = useState(false)
+  const [reminderForm, setReminderForm] = useState({ title: '', type: 'medicine', time: '09:00' })
+  const [isAddingReminder, setIsAddingReminder] = useState(false)
 
   const loadDashboardData = async () => {
     try {
       setLoading(true)
+
+      if (localStorage.getItem('demo_mode') === 'true') {
+        setPatient({
+          id: 'demo-1',
+          full_name: 'Demo Patient',
+          current_cognitive_score: 85,
+          streak_days: 5
+        })
+        setGameSessions([
+          { id: '1', score: 90, duration_seconds: 120, played_at: new Date().toISOString(), games: { name: 'Memory Match' } }
+        ])
+        setLoading(false)
+        return
+      }
+
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
       setCaregiverId(user.id)
@@ -83,8 +96,7 @@ export default function CaregiverDashboard() {
           .limit(5)
           
         if (sessions) {
-          // Type casting since Supabase returns nested objects as any by default in simple selects
-          setGameSessions(sessions as any)
+          setGameSessions(sessions as unknown as GameSession[])
         }
       }
     } catch (error) {
@@ -93,6 +105,11 @@ export default function CaregiverDashboard() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadDashboardData()
+  }, [])
 
   // Set up Realtime listener for alerts
   useEffect(() => {
@@ -108,10 +125,9 @@ export default function CaregiverDashboard() {
           table: 'alerts',
           filter: `caregiver_id=eq.${caregiverId}`
         },
-        (payload) => {
-          setAlerts((current) => [payload.new, ...current])
+        () => {
           // In a real app we might also show a toast notification here
-          alert(`New Alert: ${payload.new.message}`)
+          alert(`New Alert`)
         }
       )
       .subscribe()
@@ -155,8 +171,8 @@ export default function CaregiverDashboard() {
       setShowAddModal(false)
       setLinkInput('')
       await loadDashboardData()
-    } catch (err: any) {
-      setLinkError(err.message || "Failed to link patient.")
+    } catch (err: unknown) {
+      setLinkError((err as Error).message || "Failed to link patient.")
     } finally {
       setIsLinking(false)
     }
@@ -164,6 +180,31 @@ export default function CaregiverDashboard() {
 
   const handleSignOut = () => {
     supabase.auth.signOut()
+  }
+
+  const handleAddReminder = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!patient || !caregiverId) return
+    setIsAddingReminder(true)
+    try {
+      const { error } = await supabase.from('reminders').insert({
+        patient_id: patient.id,
+        created_by: caregiverId,
+        title: reminderForm.title,
+        type: reminderForm.type,
+        time: reminderForm.time,
+        frequency: 'daily',
+        is_active: true
+      })
+      if (error) throw error
+      setShowReminderModal(false)
+      setReminderForm({ title: '', type: 'medicine', time: '09:00' })
+      alert("Reminder added successfully!")
+    } catch (err: unknown) {
+      alert((err as Error).message || "Failed to add reminder.")
+    } finally {
+      setIsAddingReminder(false)
+    }
   }
 
   if (loading) {
@@ -183,8 +224,6 @@ export default function CaregiverDashboard() {
           </div>
           <nav className="hidden md:flex gap-6 text-sm font-semibold text-gray-500 ml-8">
             <Link to="/caregiver" className="text-[#144533] border-b-2 border-[#144533] pb-1">Dashboard</Link>
-            <Link to="/caregiver/patients" className="hover:text-[#144533] transition-colors pb-1">Patients</Link>
-            <Link to="/caregiver/reports" className="hover:text-[#144533] transition-colors pb-1">Reports</Link>
           </nav>
         </div>
         <div className="flex items-center gap-4 text-[#144533]">
@@ -201,11 +240,17 @@ export default function CaregiverDashboard() {
               {patient ? `Monitoring ${patient.full_name}'s daily activity and wellness.` : "Welcome to Sahayak."}
             </p>
           </div>
-          {!patient && (
+          {!patient ? (
             <button 
               onClick={() => setShowAddModal(true)}
               className="bg-[#1B4D3E] text-white px-6 py-3 rounded-full font-bold hover:bg-[#13382D] transition-colors shadow-sm active:scale-[0.98] flex items-center gap-2">
               <Plus size={20} /> Add Patient
+            </button>
+          ) : (
+            <button 
+              onClick={() => setShowReminderModal(true)}
+              className="bg-[#1B4D3E] text-white px-6 py-3 rounded-full font-bold hover:bg-[#13382D] transition-colors shadow-sm active:scale-[0.98] flex items-center gap-2">
+              <Bell size={20} /> Add Reminder
             </button>
           )}
         </div>
@@ -382,19 +427,69 @@ export default function CaregiverDashboard() {
         </div>
       )}
 
+      {/* Add Reminder Modal */}
+      {showReminderModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-2xl font-bold text-gray-800">New Reminder</h3>
+              <button onClick={() => setShowReminderModal(false)} className="text-gray-400 hover:text-gray-600 bg-gray-100 rounded-full p-2">
+                <X size={20} />
+              </button>
+            </div>
+            
+            <form onSubmit={handleAddReminder}>
+              <div className="mb-4">
+                <label className="block text-sm font-bold text-gray-700 mb-2">Title</label>
+                <input 
+                  type="text" 
+                  value={reminderForm.title}
+                  onChange={(e) => setReminderForm({...reminderForm, title: e.target.value})}
+                  placeholder="e.g. Take Blood Pressure Meds"
+                  className="w-full border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-[#1B4D3E]"
+                  required
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-bold text-gray-700 mb-2">Type</label>
+                <select 
+                  value={reminderForm.type}
+                  onChange={(e) => setReminderForm({...reminderForm, type: e.target.value})}
+                  className="w-full border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-[#1B4D3E] bg-white"
+                >
+                  <option value="medicine">Medicine</option>
+                  <option value="hydration">Hydration</option>
+                  <option value="activity">Activity</option>
+                </select>
+              </div>
+              <div className="mb-6">
+                <label className="block text-sm font-bold text-gray-700 mb-2">Time</label>
+                <input 
+                  type="time" 
+                  value={reminderForm.time}
+                  onChange={(e) => setReminderForm({...reminderForm, time: e.target.value})}
+                  className="w-full border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-[#1B4D3E]"
+                  required
+                />
+              </div>
+              
+              <button 
+                type="submit"
+                disabled={isAddingReminder || !reminderForm.title}
+                className="w-full bg-[#1B4D3E] text-white py-4 rounded-xl font-bold text-lg hover:bg-[#13382D] transition-colors shadow-sm disabled:opacity-50 flex justify-center items-center gap-2"
+              >
+                {isAddingReminder ? <Loader2 size={20} className="animate-spin" /> : 'Create Reminder'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Mobile Bottom Nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-6 py-4 flex justify-between z-50">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-6 py-4 flex justify-center z-50">
         <Link to="/caregiver" className="flex flex-col items-center text-[#1B4D3E]">
           <div className="p-1"><Activity size={24} /></div>
           <span className="text-xs font-bold mt-1">Dashboard</span>
-        </Link>
-        <Link to="/caregiver/patients" className="flex flex-col items-center text-gray-400">
-          <div className="p-1"><User size={24} /></div>
-          <span className="text-xs font-medium mt-1">Patients</span>
-        </Link>
-        <Link to="/caregiver/reports" className="flex flex-col items-center text-gray-400">
-          <div className="p-1"><Bell size={24} /></div>
-          <span className="text-xs font-medium mt-1">Alerts</span>
         </Link>
       </nav>
     </div>
