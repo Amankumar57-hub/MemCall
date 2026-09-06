@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, RefreshCw } from 'lucide-react'
 import { useAppStore } from '../../../store/useAppStore'
+import { supabase } from '../../../lib/supabase'
 import { t } from '../../../lib/i18n'
 import { playPremiumVoice } from '../../../lib/tts'
 
@@ -27,20 +28,59 @@ export default function MemoryGarden() {
   const [options, setOptions] = useState<typeof ALL_ITEMS>([])
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [timeLeft, setTimeLeft] = useState(10)
+  const [targetCount, setTargetCount] = useState(4)
+  const [distractorCount, setDistractorCount] = useState(2)
+  const [clicks, setClicks] = useState(0)
+
+  useEffect(() => {
+    fetchAdaptiveDifficulty()
+  }, [])
+
+  const fetchAdaptiveDifficulty = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const { data } = await supabase
+        .from('game_sessions')
+        .select('score_percentage')
+        .eq('patient_id', user.id)
+        .eq('game_name', 'MemoryGarden')
+        .order('created_at', { ascending: false })
+        .limit(5)
+
+      if (data && data.length > 0) {
+        const avg = data.reduce((acc, curr) => acc + curr.score_percentage, 0) / data.length
+        if (avg < 50) {
+          setTargetCount(3)
+          setDistractorCount(2)
+        } else if (avg >= 80) {
+          setTargetCount(5)
+          setDistractorCount(3)
+        } else {
+          setTargetCount(4)
+          setDistractorCount(2)
+        }
+      }
+    } catch (err) {
+      console.error(err)
+    }
+  }
 
   // Setup game
   const startGame = () => {
-    // Pick 4 random items to memorize
+    // Pick items based on adaptive count
     const shuffled = [...ALL_ITEMS].sort(() => 0.5 - Math.random())
-    const targets = shuffled.slice(0, 4)
+    const targets = shuffled.slice(0, targetCount)
     setTargetItems(targets)
     
-    // Pick options for recall (4 targets + 2 distractors = 6)
-    const distractors = shuffled.slice(4, 6)
+    // Pick options for recall
+    const distractors = shuffled.slice(targetCount, targetCount + distractorCount)
     const allOptions = [...targets, ...distractors].sort(() => 0.5 - Math.random())
     setOptions(allOptions)
     
     setSelectedIds(new Set())
+    setClicks(0)
     setTimeLeft(10)
     setGameState('memorize')
 
@@ -61,6 +101,24 @@ export default function MemoryGarden() {
     }
   }, [gameState, timeLeft, language])
 
+  const saveScore = async (finalClicks: number) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      
+      let score = Math.round((targetCount / finalClicks) * 100)
+      if (score > 100) score = 100
+      
+      await supabase.from('game_sessions').insert({
+        patient_id: user.id,
+        game_name: 'MemoryGarden',
+        score_percentage: score
+      })
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
   const handleSelect = (id: string) => {
     if (gameState !== 'recall') return
 
@@ -71,28 +129,30 @@ export default function MemoryGarden() {
       newSelected.add(id)
     }
     setSelectedIds(newSelected)
+    
+    const currentClicks = clicks + 1
+    setClicks(currentClicks)
 
-    // Check if they found all 4 targets
+    // Check if they found all targets
     const selectedTargetsCount = targetItems.filter(t => newSelected.has(t.id)).length
     // if selected only targets and selected all targets
-    const isSuccess = selectedTargetsCount === 4 && newSelected.size === 4
+    const isSuccess = selectedTargetsCount === targetCount && newSelected.size === targetCount
 
     if (isSuccess) {
       setGameState('success')
       const msg = t('Very good! Your memory garden is growing.', language)
       playPremiumVoice(msg, language)
-      
-      // Update cognitive score here if connected to backend (placeholder)
+      saveScore(currentClicks)
     }
   }
 
   return (
-    <div className="min-h-screen bg-[#FDFDF9] font-sans pb-24 flex flex-col">
+    <div className="min-h-screen bg-background font-sans pb-24 flex flex-col">
       <header className="px-6 py-4 flex items-center gap-4 bg-white border-b border-gray-100 shadow-sm sticky top-0 z-10">
-        <Link to="/patient/games" className="p-2 hover:bg-gray-100 rounded-full text-[#144533] transition-colors">
+        <Link to="/patient/games" className="p-2 hover:bg-gray-100 rounded-full text-primary transition-colors">
           <ArrowLeft size={28} />
         </Link>
-        <h1 className="text-2xl font-bold text-[#144533]">
+        <h1 className="text-2xl font-bold text-primary">
           {t('Memory Garden', language)}
         </h1>
       </header>
@@ -109,7 +169,7 @@ export default function MemoryGarden() {
             </p>
             <button 
               onClick={startGame}
-              className="bg-[#1B4D3E] text-white text-2xl font-bold py-4 px-12 rounded-full shadow-lg hover:bg-[#13382D] transition-transform active:scale-95"
+              className="bg-primary-hover text-white text-2xl font-bold py-4 px-12 rounded-full shadow-lg hover:bg-primary-hover transition-transform active:scale-95"
             >
               {t('Start', language)}
             </button>
@@ -133,11 +193,11 @@ export default function MemoryGarden() {
 
             <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
               <div 
-                className="bg-[#1B4D3E] h-full transition-all duration-1000 ease-linear"
+                className="bg-primary-hover h-full transition-all duration-1000 ease-linear"
                 style={{ width: `${(timeLeft / 10) * 100}%` }}
               ></div>
             </div>
-            <p className="text-[#1B4D3E] font-bold text-xl mt-4">{timeLeft}s</p>
+            <p className="text-primary-hover font-bold text-xl mt-4">{timeLeft}s</p>
           </div>
         )}
 
@@ -156,12 +216,12 @@ export default function MemoryGarden() {
                     onClick={() => handleSelect(item.id)}
                     className={`border-4 rounded-[24px] p-6 flex flex-col items-center justify-center aspect-square transition-all duration-300 ${
                       isSelected 
-                        ? 'bg-[#E1F4EA] border-[#1B4D3E] shadow-md scale-[1.02]' 
+                        ? 'bg-accent border-[#1B4D3E] shadow-md scale-[1.02]' 
                         : 'bg-white border-transparent shadow-sm hover:shadow-md hover:border-gray-200'
                     }`}
                   >
                     <span className="text-5xl mb-2">{item.icon}</span>
-                    <span className={`text-xl font-bold ${isSelected ? 'text-[#1B4D3E]' : 'text-gray-700'}`}>
+                    <span className={`text-xl font-bold ${isSelected ? 'text-primary-hover' : 'text-gray-700'}`}>
                       {t(item.label, language)}
                     </span>
                   </button>
@@ -173,10 +233,10 @@ export default function MemoryGarden() {
 
         {gameState === 'success' && (
           <div className="text-center animate-in zoom-in fade-in duration-500">
-            <div className="w-32 h-32 bg-[#E1F4EA] rounded-full flex items-center justify-center mx-auto mb-8 shadow-inner">
+            <div className="w-32 h-32 bg-accent rounded-full flex items-center justify-center mx-auto mb-8 shadow-inner">
               <span className="text-6xl">🌱</span>
             </div>
-            <h2 className="text-3xl font-bold text-[#1B4D3E] mb-4">
+            <h2 className="text-3xl font-bold text-primary-hover mb-4">
               {t('Very good!', language)}
             </h2>
             <p className="text-xl text-gray-600 mb-10 max-w-md mx-auto">
@@ -186,7 +246,7 @@ export default function MemoryGarden() {
             <div className="flex gap-4 justify-center">
               <button 
                 onClick={startGame}
-                className="bg-[#1B4D3E] text-white text-xl font-bold py-4 px-8 rounded-full shadow-lg hover:bg-[#13382D] transition-transform active:scale-95 flex items-center gap-2"
+                className="bg-primary-hover text-white text-xl font-bold py-4 px-8 rounded-full shadow-lg hover:bg-primary-hover transition-transform active:scale-95 flex items-center gap-2"
               >
                 <RefreshCw size={24} />
                 {t('Play Again', language)}

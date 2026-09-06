@@ -26,12 +26,21 @@ export default function Onboarding() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error("No user found")
 
+      const { error: upsertError } = await supabase.from('users').upsert({
+        id: user.id,
+        full_name: user.user_metadata?.full_name || user.user_metadata?.name || 'User',
+        avatar_url: user.user_metadata?.avatar_url || null,
+        role: role
+      }, { onConflict: 'id' })
+
+      if (upsertError) console.error('Upsert Error:', upsertError)
+
       // Update user metadata
       await supabase.auth.updateUser({
         data: { onboarding_complete: true, role }
       })
 
-      const { data: dbUser, error: fetchError } = await supabase.from('users').select('id').eq('auth_id', user.id).single()
+      const { data: dbUser, error: fetchError } = await supabase.from('users').select('id').eq('id', user.id).single()
       
       if (fetchError || !dbUser) {
         throw new Error("Could not find user profile in database.")
@@ -61,17 +70,17 @@ export default function Onboarding() {
 
   if (!role) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#FDFDF9] font-sans p-4">
+      <div className="min-h-screen flex items-center justify-center bg-background font-sans p-4">
         <div className="w-full max-w-4xl text-center">
-          <h1 className="text-4xl md:text-5xl font-bold text-[#144533] mb-3">Welcome to MemCall</h1>
+          <h1 className="text-4xl md:text-5xl font-bold text-primary mb-3">Welcome to MemCall</h1>
           <p className="text-gray-500 font-medium mb-12">Please select your role to continue:</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-3xl mx-auto">
             <button 
               onClick={() => setRole('patient')}
-              className="group flex flex-col items-center justify-center p-10 bg-white border-2 border-gray-100 rounded-3xl shadow-sm hover:border-[#144533] hover:shadow-md transition-all active:scale-[0.98]"
+              className="group flex flex-col items-center justify-center p-10 bg-white border-2 border-gray-100 rounded-3xl shadow-sm hover:border-primary hover:shadow-md transition-all active:scale-[0.98]"
             >
-              <div className="bg-[#E1F4EA] p-6 rounded-full mb-6 group-hover:scale-110 transition-transform">
-                <Home size={48} className="text-[#144533]" />
+              <div className="bg-accent p-6 rounded-full mb-6 group-hover:scale-110 transition-transform">
+                <Home size={48} className="text-primary" />
               </div>
               <h2 className="text-2xl font-bold text-gray-800 mb-3">I am a Patient</h2>
               <p className="text-gray-500 font-medium text-center">Starting daily tasks, play games...</p>
@@ -94,7 +103,7 @@ export default function Onboarding() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#FDFDF9] font-sans p-4">
+    <div className="min-h-screen flex items-center justify-center bg-background font-sans p-4">
       <div className="max-w-md w-full bg-white p-8 rounded-3xl shadow-sm border border-gray-100 text-left">
         <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">Final Details</h2>
         
@@ -109,16 +118,23 @@ export default function Onboarding() {
             <>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Preferred Language</label>
-                <select value={language} onChange={e => setLanguage(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#144533]">
+                <select value={language} onChange={e => setLanguage(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary">
                   <option value="en">English</option>
-                  <option value="hi">Hindi</option>
-                  <option value="as">Assamese (অসমীয়া)</option>
-                  <option value="bn">Bengali (বাংলা)</option>
+                  <option value="hi">हिन्दी (Hindi)</option>
+                  <option value="mr">मराठी (Marathi)</option>
+                  <option value="gu">ગુજરાતી (Gujarati)</option>
+                  <option value="bn">বাংলা (Bengali)</option>
+                  <option value="ta">தமிழ் (Tamil)</option>
+                  <option value="te">తెలుగు (Telugu)</option>
+                  <option value="as">অসমীয়া (Assamese)</option>
+                  <option value="kha">Khasi</option>
+                  <option value="lus">Mizo</option>
+                  <option value="nag">Nagamese</option>
                 </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Cognitive Concern Level</label>
-                <select value={concern} onChange={e => setConcern(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#144533]">
+                <select value={concern} onChange={e => setConcern(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary">
                   <option value="mild">Mild Forgetfulness</option>
                   <option value="moderate">Moderate Memory Loss</option>
                   <option value="severe">Severe Decline</option>
@@ -129,7 +145,7 @@ export default function Onboarding() {
             <>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Relationship to Patient</label>
-                <select value={relationship} onChange={e => setRelationship(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#144533]">
+                <select value={relationship} onChange={e => setRelationship(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary">
                   <option value="Family member">Family Member</option>
                   <option value="Healthcare worker">Healthcare Worker</option>
                   <option value="ASHA worker">ASHA Worker</option>
@@ -139,7 +155,7 @@ export default function Onboarding() {
             </>
           )}
           
-          <button disabled={loading} type="submit" className="w-full bg-[#144533] text-white font-bold rounded-xl py-3.5 mt-4 hover:bg-[#1B4D3E] transition-colors disabled:opacity-70 flex items-center justify-center gap-2">
+          <button disabled={loading} type="submit" className="w-full bg-primary text-white font-bold rounded-xl py-3.5 mt-4 hover:bg-primary-hover transition-colors disabled:opacity-70 flex items-center justify-center gap-2">
             {loading ? <><Loader2 className="animate-spin" size={20} /> Saving...</> : 'Complete Setup'}
           </button>
           

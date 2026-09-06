@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Play, Trophy, Loader2 } from 'lucide-react'
+import { ArrowLeft, Play, Trophy, Loader2, ChevronLeft, ChevronRight } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
 import { playClickSound } from '../../../lib/audio'
 import { useAppStore } from '../../../store/useAppStore'
@@ -63,15 +63,31 @@ export default function ShapeTracer() {
   const [score, setScore] = useState(0)
   const [isSaving, setIsSaving] = useState(false)
 
+  const [maxUnlockedLevel, setMaxUnlockedLevel] = useState(0)
+
   useEffect(() => {
-    // Load saved level from localStorage
-    const savedLevel = localStorage.getItem('shape_tracer_level')
-    if (savedLevel) {
-      const parsed = parseInt(savedLevel)
-      if (!isNaN(parsed) && parsed >= 0 && parsed < 25) {
-        setCurrentLevel(parsed)
+    const fetchProgress = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          const { data } = await supabase
+            .from('game_progress')
+            .select('highest_level')
+            .eq('user_id', user.id)
+            .eq('game_id', 'shape-tracer')
+            .maybeSingle()
+          
+          if (data && data.highest_level) {
+            const maxLevel = Math.min(data.highest_level - 1, LEVELS.length - 1)
+            setMaxUnlockedLevel(maxLevel)
+            setCurrentLevel(maxLevel)
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching progress:', err)
       }
     }
+    fetchProgress()
   }, [])
 
   const startGame = () => {
@@ -94,78 +110,87 @@ export default function ShapeTracer() {
     }
   }
 
-  const handleLevelComplete = () => {
-    setTimeout(() => {
-      if (currentLevel < LEVELS.length - 1) {
-        const next = currentLevel + 1
-        setCurrentLevel(next)
-        setPointsClicked([])
-        localStorage.setItem('shape_tracer_level', next.toString())
-      } else {
-        handleGameComplete()
-      }
-    }, 1000)
-  }
-
-  const handleGameComplete = async () => {
-    setGameFinished(true)
-    setIsPlaying(false)
-    
-    playPremiumVoice(t('Great Job!', language), language)
-    
-    if (!startTime) return
-    
-    const durationSeconds = Math.floor((Date.now() - startTime) / 1000)
-    // Simple score: 100 per level, minus time taken
-    const finalScore = Math.max(0, (25 * 100) - durationSeconds)
-    setScore(finalScore)
+  const handleLevelComplete = async () => {
+    if (!startTime || isSaving) return
     setIsSaving(true)
-
+    
     try {
+      const durationSeconds = Math.floor((Date.now() - startTime) / 1000)
+      const levelScore = Math.max(0, 100 - durationSeconds)
+      setScore(s => s + levelScore)
+      
       const { data: userData } = await supabase.auth.getUser()
       if (userData.user) {
-        let gameId = 'shape-tracer-uuid-placeholder';
-        if (navigator.onLine) {
-          const { data: gameData } = await supabase
-            .from('games')
-            .select('id')
-            .eq('slug', 'shape-tracer')
-            .single()
-          if (gameData) gameId = gameData.id;
-        }
+        let gameId = 'shape-tracer'
 
+        // 1. Save Session
         const payload = {
           patient_id: userData.user.id,
           game_id: gameId,
-          difficulty_level: currentLevel + 1,
-          score: finalScore,
-          questions_attempted: LEVELS.length,
-          questions_correct: LEVELS.length,
-          hints_used: 0,
-          duration_seconds: durationSeconds,
-          completed: true
+          score: levelScore,
+          duration_seconds: durationSeconds
         }
 
         if (navigator.onLine) {
-          await supabase.from('game_sessions').insert(payload)
-        } else {
-          const { db } = await import('../../../lib/db');
-          await db.sync_queue.add({
-            table_name: 'game_sessions',
-            operation: 'INSERT',
-            payload: payload,
-            created_at: new Date().toISOString(),
-            status: 'pending'
-          });
+          try {
+            await supabase.from('game_sessions').insert(payload)
+          } catch (e) {
+            console.error('game_sessions insert failed', e)
+          }
+
+          // 2. Update Progress
+          const nextLevel = Math.min(currentLevel + 1, LEVELS.length - 1)
+          const newMaxLevel = Math.max(maxUnlockedLevel, nextLevel)
+          
+          try {
+            const { data: existingProgress } = await supabase
+              .from('game_progress')
+              .select('*')
+              .eq('user_id', userData.user.id)
+              .eq('game_id', gameId)
+              .maybeSingle()
+              
+            const progressPayload = {
+              user_id: userData.user.id,
+              game_id: gameId,
+              highest_level: newMaxLevel + 1,
+              total_games_played: (existingProgress?.total_games_played || 0) + 1,
+              total_score: (existingProgress?.total_score || 0) + levelScore,
+              updated_at: new Date().toISOString()
+            }
+            
+            await supabase.from('game_progress').upsert(progressPayload, { onConflict: 'user_id,game_id' })
+            
+            if (newMaxLevel > maxUnlockedLevel) {
+              setMaxUnlockedLevel(newMaxLevel)
+            }
+          } catch (e) {
+            console.error('game_progress upsert failed', e)
+          }
         }
       }
+      
+      setTimeout(() => {
+        if (currentLevel < LEVELS.length - 1) {
+          setCurrentLevel(currentLevel + 1)
+          setPointsClicked([])
+          setStartTime(Date.now()) // Reset timer for next level
+          setIsSaving(false)
+        } else {
+          handleGameComplete()
+        }
+      }, 1000)
     } catch (error) {
       console.error('Error saving session:', error)
-    } finally {
       setIsSaving(false)
-      // Reset level for next time
-      localStorage.setItem('shape_tracer_level', '0')
     }
+  }
+
+  const handleGameComplete = () => {
+    setGameFinished(true)
+    setIsPlaying(false)
+    setIsSaving(false)
+    playPremiumVoice(t('Great Job!', language), language)
   }
 
   const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
@@ -176,29 +201,29 @@ export default function ShapeTracer() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#FDFDF9]">
+    <div className="flex flex-col min-h-screen bg-background">
       <header className="px-6 py-4 flex items-center justify-between border-b border-gray-100 bg-white sticky top-0 z-10 shadow-sm">
         <div className="flex items-center gap-4">
-          <Link to="/patient/games" className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors text-[#144533]">
+          <Link to="/patient/games" className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors text-primary">
             <ArrowLeft size={24} />
           </Link>
-          <h1 className="text-2xl font-bold text-[#144533]">{t('Shape Tracer', language)}</h1>
+          <h1 className="text-2xl font-bold text-primary">{t('Shape Tracer', language)}</h1>
         </div>
       </header>
 
       <main className="flex-1 p-6 md:p-10 max-w-2xl mx-auto w-full flex flex-col">
         {!isPlaying && !gameFinished ? (
           <div className="bg-white border border-gray-100 rounded-3xl p-8 shadow-sm text-center flex-1 flex flex-col justify-center items-center">
-            <div className="w-24 h-24 bg-[#E1F4EA] text-[#1B4D3E] rounded-full flex items-center justify-center mb-6">
+            <div className="w-24 h-24 bg-accent text-primary-hover rounded-full flex items-center justify-center mb-6">
               <Play size={48} className="ml-2" />
             </div>
             <h2 className="text-3xl font-bold text-gray-800 mb-4">{t('Shape Tracer', language)}</h2>
-            <p className="text-gray-500 max-w-md mx-auto mb-8 text-lg leading-relaxed">
+            <p className="text-gray-500 dark:text-gray-300 max-w-md mx-auto mb-8 text-lg leading-relaxed">
               {t('Connect the dots in order to trace the hidden shape. Improves motor skills and spatial memory.', language)}
             </p>
             <button 
               onClick={startGame}
-              className="bg-[#1B4D3E] text-white px-10 py-4 rounded-full font-bold text-xl hover:bg-[#13382D] transition-transform active:scale-95 shadow-md">
+              className="bg-primary-hover text-white px-10 py-4 rounded-full font-bold text-xl hover:bg-primary-hover transition-transform active:scale-95 shadow-md">
               {currentLevel > 0 ? t('Continue Game', language) : t('Start Game', language)}
             </button>
           </div>
@@ -208,17 +233,17 @@ export default function ShapeTracer() {
               <Trophy size={48} />
             </div>
             <h2 className="text-4xl font-bold text-gray-800 mb-2">{t('Great Job!', language)}</h2>
-            <p className="text-gray-500 text-lg mb-8">{t('You traced all shapes perfectly.', language)}</p>
+            <p className="text-gray-500 dark:text-gray-300 text-lg mb-8">{t('You traced all shapes perfectly.', language)}</p>
             
-            <div className="bg-[#FDFDF9] rounded-2xl p-6 mb-8 w-full max-w-xs border border-gray-100 shadow-inner">
+            <div className="bg-background rounded-2xl p-6 mb-8 w-full max-w-xs border border-gray-100 shadow-inner">
               <p className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-1">{t('Your Score', language)}</p>
-              <p className="text-5xl font-black text-[#1B4D3E]">{score}</p>
+              <p className="text-5xl font-black text-primary-hover">{score}</p>
             </div>
             
             <div className="flex gap-4">
               <button 
                 onClick={startGame}
-                className="bg-[#1B4D3E] text-white px-8 py-3 rounded-full font-bold hover:bg-[#13382D] transition-transform active:scale-95 shadow-sm">
+                className="bg-primary-hover text-white px-8 py-3 rounded-full font-bold hover:bg-primary-hover transition-transform active:scale-95 shadow-sm">
                 {t('Play Again', language)}
               </button>
               <button 
@@ -232,15 +257,31 @@ export default function ShapeTracer() {
         ) : (
           <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm flex flex-col flex-1 relative overflow-hidden">
             <div className="flex justify-between items-center mb-8">
-              <span className="bg-gray-100 px-4 py-2 rounded-full font-bold text-gray-600 text-sm">
-                Level {currentLevel + 1} of {LEVELS.length}
-              </span>
-              <span className="font-bold text-[#1B4D3E]">
+              <div className="flex items-center gap-2">
+                <button 
+                  disabled={currentLevel === 0}
+                  onClick={() => { setCurrentLevel(l => l - 1); setPointsClicked([]); setStartTime(Date.now()); }}
+                  className="p-1 rounded-full text-gray-400 hover:text-gray-800 hover:bg-gray-100 disabled:opacity-30 transition-colors"
+                >
+                  <ChevronLeft size={18} />
+                </button>
+                <span className="bg-gray-100 px-4 py-2 rounded-full font-bold text-gray-600 text-sm min-w-[100px] text-center">
+                  Level {currentLevel + 1} of {LEVELS.length}
+                </span>
+                <button 
+                  disabled={currentLevel >= maxUnlockedLevel}
+                  onClick={() => { setCurrentLevel(l => l + 1); setPointsClicked([]); setStartTime(Date.now()); }}
+                  className="p-1 rounded-full text-gray-400 hover:text-gray-800 hover:bg-gray-100 disabled:opacity-30 transition-colors"
+                >
+                  <ChevronRight size={18} />
+                </button>
+              </div>
+              <span className="font-bold text-primary-hover">
                 {LEVELS[currentLevel].name}
               </span>
             </div>
             
-            <div className="flex-1 w-full bg-[#FDFDF9] rounded-2xl border-2 border-dashed border-gray-200 relative p-4 flex items-center justify-center">
+            <div className="flex-1 w-full bg-background rounded-2xl border-2 border-dashed border-gray-200 relative p-4 flex items-center justify-center">
               <svg 
                 viewBox="0 0 100 100" 
                 className="w-full h-full max-h-[60vh] touch-none"
@@ -309,7 +350,7 @@ export default function ShapeTracer() {
                       transform={`translate(${point.x}, ${point.y})`}
                       onClick={() => handlePointClick(i)}
                       onTouchStart={() => handlePointClick(i)}
-                      className={`cursor-pointer transition-transform ${isNext ? 'hover:scale-125' : ''}`}
+                      className="cursor-pointer"
                     >
                       {/* Outer target area (invisible but larger for easy tapping) */}
                       <circle r="8" fill="transparent" />
@@ -318,7 +359,7 @@ export default function ShapeTracer() {
                       <circle 
                         r="3" 
                         fill={isClicked ? '#1B4D3E' : isNext ? '#34D399' : '#D1D5DB'} 
-                        className={`transition-colors duration-300 ${isNext ? 'animate-pulse' : ''}`}
+                        className="transition-colors duration-300"
                       />
                       
                       {/* Numbers */}
@@ -335,7 +376,7 @@ export default function ShapeTracer() {
               </svg>
             </div>
             
-            <div className="mt-6 text-center text-gray-500 font-medium">
+            <div className="mt-6 text-center text-gray-500 dark:text-gray-300 font-medium">
               Tap the dots in numerical order.
             </div>
           </div>

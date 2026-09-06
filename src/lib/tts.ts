@@ -1,56 +1,120 @@
-export const playPremiumVoice = (text: string, language: string) => {
-  if (!('speechSynthesis' in window)) return;
-
-  window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(text);
+const playGoogleTranslateTTS = async (text: string, langCode: string): Promise<void> => {
+  const chunks = text.match(/.{1,150}(\s|$)/g) || [text];
+  const tlCode = langCode.split('-')[0];
   
-  // Set language code
-  utterance.lang = language === 'hi' ? 'hi-IN' : language === 'mr' ? 'mr-IN' : 'en-US';
-  utterance.rate = 0.95;
-  utterance.pitch = 1.1; // Slightly higher pitch for a "sweet" female voice
-
-  // Safari/Chrome have different ways of loading voices, so we ensure they are loaded
-  const setBestVoice = () => {
-    const voices = window.speechSynthesis.getVoices();
-    if (voices.length === 0) return;
-
-    // We want a high-quality female voice
-    const premiumKeywords = ['google', 'siri', 'samantha', 'lekha', 'zira', 'karen', 'tessa'];
+  for (const chunk of chunks) {
+    if (!chunk.trim()) continue;
     
-    // First try to find a premium female voice matching the language
-    let bestVoice = voices.find(v => 
-      v.lang.startsWith(utterance.lang.split('-')[0]) && 
-      premiumKeywords.some(keyword => v.name.toLowerCase().includes(keyword))
-    );
+    const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(chunk.trim())}&tl=${tlCode}&client=tw-ob`;
+    
+    await new Promise<void>((resolve) => {
+      const audio = new Audio(url);
+      audio.playbackRate = 0.95;
+      
+      let hasFallenBack = false;
+      audio.onended = () => resolve();
+      
+      audio.onerror = () => {
+        if (!hasFallenBack) {
+          hasFallenBack = true;
+          console.warn('Network TTS failed completely.');
+          resolve();
+        }
+      };
+      
+      audio.play().catch(e => {
+        if (!hasFallenBack) {
+          hasFallenBack = true;
+          console.warn('Audio play prevented by browser policy:', e);
+          resolve();
+        }
+      });
+    });
+  }
+};
 
-    // Fallback 1: Any voice for the specific language that has "female" or premium keywords
+const playLocalTTS = (text: string, langCode: string): Promise<boolean> => {
+  return new Promise((resolve) => {
+    if (!('speechSynthesis' in window)) {
+      resolve(false);
+      return;
+    }
+    
+    // Ensure voices are loaded
+    const voices = window.speechSynthesis.getVoices();
+    
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = langCode;
+    utterance.rate = 0.9;
+    utterance.pitch = 1.1;
+
+    const langPrefix = langCode.split('-')[0];
+    const availableVoices = voices.filter(v => v.lang.startsWith(langPrefix));
+
+    // Filter for female-sounding voices first, avoiding known male voices
+    const maleKeywords = ['male', 'boy', 'man', 'david', 'mark', 'daniel', 'rishi'];
+    const femaleKeywords = ['female', 'girl', 'woman', 'zira', 'samantha', 'victoria', 'aditi', 'lekha', 'google us english'];
+    
+    let candidateVoices = availableVoices.filter(v => !maleKeywords.some(mk => v.name.toLowerCase().includes(mk)));
+    if (candidateVoices.length === 0) candidateVoices = availableVoices; // Fallback if all are marked male
+    
+    // Priority 1: Premium/Cloud Female voices
+    let bestVoice = candidateVoices.find(v => {
+      const name = v.name.toLowerCase();
+      const isPremium = name.includes('google') || name.includes('siri') || name.includes('premium') || name.includes('natural') || name.includes('online');
+      const isFemale = femaleKeywords.some(fk => name.includes(fk));
+      return isPremium && isFemale;
+    });
+
+    // Priority 2: Any Female voice
     if (!bestVoice) {
-      bestVoice = voices.find(v => 
-        v.lang.startsWith(utterance.lang.split('-')[0]) && 
-        (v.name.toLowerCase().includes('female') || premiumKeywords.some(keyword => v.name.toLowerCase().includes(keyword)))
-      );
+      bestVoice = candidateVoices.find(v => femaleKeywords.some(fk => v.name.toLowerCase().includes(fk)));
     }
 
-    // Fallback 2: Any voice for the language
+    // Priority 3: Any Premium/Cloud voice (Google Hindi/Marathi default to female usually)
     if (!bestVoice) {
-      bestVoice = voices.find(v => v.lang.startsWith(utterance.lang.split('-')[0]));
+      bestVoice = candidateVoices.find(v => {
+        const name = v.name.toLowerCase();
+        return name.includes('google') || name.includes('siri') || name.includes('premium') || name.includes('natural') || name.includes('online');
+      });
+    }
+
+    // Fallback: first candidate
+    if (!bestVoice) {
+      bestVoice = candidateVoices[0];
     }
 
     if (bestVoice) {
       utterance.voice = bestVoice;
     }
     
+    utterance.onend = () => resolve(true);
+    utterance.onerror = () => resolve(false);
+    
     window.speechSynthesis.speak(utterance);
-  };
+  });
+};
 
-  if (window.speechSynthesis.getVoices().length > 0) {
-    setBestVoice();
-  } else {
-    // Wait for voices to load (especially on Safari/Chrome on first load)
-    window.speechSynthesis.onvoiceschanged = () => {
-      setBestVoice();
-    };
-    // Fallback if event doesn't fire
-    setTimeout(setBestVoice, 1000);
+export const playPremiumVoice = async (text: string, language: string) => {
+  if (!text) return;
+  
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+  }
+
+  const langCode = language === 'hi' ? 'hi-IN' : language === 'mr' ? 'mr-IN' : 'en-US';
+  
+  try {
+    // Try Web Speech API (Local/Cloud Premium Voices) FIRST
+    const success = await playLocalTTS(text, langCode);
+    
+    // If it fails (or no voice exists for the language), fallback to Google Translate TTS
+    if (!success) {
+      console.warn("Local voice failed or not found, falling back to Google Translate TTS");
+      await playGoogleTranslateTTS(text, langCode);
+    }
+  } catch (error) {
+    console.error("TTS error:", error);
+    await playGoogleTranslateTTS(text, langCode);
   }
 };

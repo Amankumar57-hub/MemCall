@@ -1,25 +1,28 @@
 import { Link } from 'react-router-dom'
-import { Bell, User, ArrowLeft, LayoutGrid, CheckCircle2 } from 'lucide-react'
+import { Brain, ArrowLeft } from 'lucide-react'
 import { useAppStore } from '../../../store/useAppStore'
 import { t } from '../../../lib/i18n'
 
 export default function GameList() {
   const { language } = useAppStore()
+  
   const games = [
     {
-      id: 'pattern-match',
-      title: 'Traditional Pattern Match',
-      desc: 'Match the stunning woven designs from local handlooms.',
-      image: '/images/memory_match.jpg',
-      bgColor: 'bg-[#E1F4EA]',
-      tag: 'Memory'
+      id: 'ner-pattern-match',
+      title: 'NER Heritage Match',
+      desc: 'Match cultural symbols of the North East (Gamosa, Rhino, Tea).',
+      image: '/images/memory_match.jpg', // Reusing image for now, can be updated later
+      bgColor: 'bg-[#FFEDD5]',
+      textColor: 'text-[#EA580C]',
+      tag: 'Culture'
     },
     {
       id: 'memory-garden',
       title: 'Memory Garden',
       desc: 'Memorize the items in the garden and recall them. Helps improve short-term memory.',
-      image: '/images/memory_match.jpg', // Placeholder
-      bgColor: 'bg-[#E8F0FE]',
+      image: '/images/memory_match.jpg',
+      bgColor: 'bg-[#E0F2FE]',
+      textColor: 'text-[#0284C7]',
       tag: 'Memory'
     },
     {
@@ -27,7 +30,8 @@ export default function GameList() {
       title: 'Shape Tracer',
       desc: 'Connect the dots in order to trace the hidden shape. Improves motor skills and spatial memory.',
       image: '/images/shape_tracer.jpg',
-      bgColor: 'bg-[#FCEBD7]',
+      bgColor: 'bg-[#FDE2E4]',
+      textColor: 'text-[#E11D48]',
       tag: 'Motor'
     },
     {
@@ -35,7 +39,8 @@ export default function GameList() {
       title: 'Daily Sound Recognition',
       desc: 'Listen closely and identify everyday familiar sounds.',
       image: '/images/sound_recognition.jpg',
-      bgColor: 'bg-[#FCE4E6]',
+      bgColor: 'bg-[#FEF9C3]',
+      textColor: 'text-[#CA8A04]',
       tag: 'Audio'
     },
     {
@@ -43,88 +48,58 @@ export default function GameList() {
       title: 'Family Photo Quiz',
       desc: 'Upload photos of your loved ones and play a memory quiz to remember their names.',
       image: '/images/family_quiz.jpg',
-      bgColor: 'bg-[#FFF3E0]',
+      bgColor: 'bg-[#DCFCE7]',
+      textColor: 'text-[#16A34A]',
       tag: 'Social'
     }
   ]
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#FDFDF9] font-sans pb-24">
-      {/* Top Header */}
-      <header className="px-6 py-4 flex justify-between items-center border-b border-gray-100 bg-white sticky top-0 z-10">
-        <div className="flex items-center gap-6">
-          <h1 className="text-2xl font-bold text-[#144533]">MemCall</h1>
-          <nav className="hidden md:flex gap-6 text-sm font-semibold text-gray-500">
-            <Link to="/patient" className="hover:text-[#144533] transition-colors pb-1">{t('Today', language)}</Link>
-            <Link to="/patient/games" className="text-[#144533] border-b-2 border-[#144533] pb-1">{t('Games', language)}</Link>
-            <Link to="/patient/reminders" className="hover:text-[#144533] transition-colors pb-1">{t('Reminders', language)}</Link>
-            <Link to="/patient/profile" className="hover:text-[#144533] transition-colors pb-1">{t('Profile', language)}</Link>
-          </nav>
-        </div>
-        <div className="flex items-center gap-4 text-[#144533]">
-          <button className="p-2 hover:bg-gray-100 rounded-full"><Bell size={24} /></button>
-          <button className="p-2 hover:bg-gray-100 rounded-full"><User size={24} /></button>
-          <button className="hidden md:block bg-red-600 text-white px-4 py-2 rounded-full font-bold text-sm">Emergency</button>
-        </div>
-      </header>
+    <main className="flex-1 px-4 md:px-8 max-w-5xl mx-auto w-full flex flex-col gap-6 mt-4 pb-12">
+      
+      <div className="flex items-center gap-4 mt-2 mb-4">
+         <Link to="/patient" className="p-2 -ml-2 text-gray-500 dark:text-gray-300 hover:text-primary transition-colors rounded-full hover:bg-gray-50 dark:hover:bg-gray-800">
+           <ArrowLeft size={28} />
+         </Link>
+         <div className="w-14 h-14 bg-[#EFE8FA] rounded-2xl flex items-center justify-center text-[#7C3AED] shadow-sm">
+           <Brain size={32} />
+         </div>
+         <div>
+            <h2 className="text-3xl font-extrabold text-[#5A4B81] dark:text-white">{t('Choose a Game', language)}</h2>
+            <p className="text-gray-500 dark:text-gray-400 font-medium text-sm mt-1 max-w-sm">
+              {t('Select an activity below to keep your mind active.', language)}
+            </p>
+         </div>
+      </div>
 
-      <main className="flex-1 p-6 md:p-10 max-w-5xl mx-auto w-full">
-        <Link to="/patient" className="inline-flex items-center gap-2 text-[#144533] font-medium mb-6 hover:underline">
-          <ArrowLeft size={20} /> {t('Back to Home', language)}
-        </Link>
-        
-        <div className="mb-10">
-          <h2 className="text-4xl font-bold text-gray-800 mb-3">{t('Choose a Game', language)}</h2>
-          <p className="text-gray-500 font-medium text-lg max-w-2xl">
-            {t('Select an activity below to keep your mind active. These games are designed to be enjoyable and helpful.', language)}
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {games.map(game => (
-            <div key={game.id} className="bg-white border border-gray-100 rounded-3xl overflow-hidden shadow-sm hover:shadow-md transition-all flex flex-col">
-              <div className="h-48 relative overflow-hidden bg-gray-100">
-                <img src={game.image} alt={game.title} className="w-full h-full object-cover" />
-                <div className={`absolute top-4 left-4 ${game.bgColor} text-[#144533] px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide`}>
-                  {t(game.tag, language)}
-                </div>
-              </div>
-              
-              <div className="p-6 flex flex-col flex-1">
-                <h3 className="text-xl font-bold text-gray-800 mb-2">{t(game.title, language)}</h3>
-                <p className="text-gray-500 text-sm mb-6 flex-1 line-clamp-2">{t(game.desc, language)}</p>
-                
-                <Link 
-                  to={`/patient/games/${game.id === 'pattern-match' ? 'memory' : game.id}`}
-                  className="w-full bg-[#1B4D3E] text-white font-bold rounded-full py-3.5 text-center hover:bg-[#13382D] transition-colors shadow-md active:scale-[0.98]"
-                >
-                  {t('Play', language)}
-                </Link>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {games.map(game => (
+          <div key={game.id} className="bg-white dark:bg-card rounded-3xl overflow-hidden shadow-sm hover:shadow-md transition-all group flex flex-col border border-gray-100 dark:border-border">
+            <div className="h-44 relative overflow-hidden bg-gray-100 dark:bg-gray-800 p-2">
+              <img 
+                src={game.image} 
+                alt={game.title} 
+                className="w-full h-full object-cover rounded-2xl group-hover:scale-105 transition-transform duration-500"
+              />
+              <div className={`absolute top-4 left-4 ${game.bgColor} ${game.textColor} px-3 py-1 rounded-full text-xs font-bold shadow-sm uppercase tracking-wider`}>
+                {game.tag}
               </div>
             </div>
-          ))}
-        </div>
-      </main>
-
-      {/* Mobile Bottom Nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-6 py-4 flex justify-between z-50">
-        <Link to="/patient" className="flex flex-col items-center text-gray-400">
-          <div className="p-1"><CheckCircle2 size={24} /></div>
-          <span className="text-xs font-medium mt-1">{t('Today', language)}</span>
-        </Link>
-        <Link to="/patient/games" className="flex flex-col items-center text-[#1B4D3E]">
-          <div className="p-1"><LayoutGrid size={24} /></div>
-          <span className="text-xs font-bold mt-1">{t('Games', language)}</span>
-        </Link>
-        <Link to="/patient/reminders" className="flex flex-col items-center text-gray-400">
-          <div className="p-1"><Bell size={24} /></div>
-          <span className="text-xs font-medium mt-1">{t('Alerts', language)}</span>
-        </Link>
-        <Link to="/patient/profile" className="flex flex-col items-center text-gray-400">
-          <div className="p-1"><User size={24} /></div>
-          <span className="text-xs font-medium mt-1">{t('Profile', language)}</span>
-        </Link>
-      </nav>
-    </div>
+            
+            <div className="p-6 flex flex-col flex-1">
+              <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100 mb-2">{t(game.title, language)}</h3>
+              <p className="text-gray-500 dark:text-gray-400 text-sm mb-6 flex-1 font-medium leading-relaxed">{t(game.desc, language)}</p>
+              
+              <Link 
+                to={`/patient/games/${game.id === 'pattern-match' ? 'memory' : game.id}`}
+                className={`w-full ${game.bgColor} ${game.textColor} font-bold rounded-2xl py-3.5 text-center hover:opacity-80 transition-opacity shadow-sm active:scale-[0.98]`}
+              >
+                {t('Play Game', language)}
+              </Link>
+            </div>
+          </div>
+        ))}
+      </div>
+    </main>
   )
 }

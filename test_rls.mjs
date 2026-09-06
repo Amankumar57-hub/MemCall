@@ -1,0 +1,22 @@
+import { createClient } from '@supabase/supabase-js';
+import * as fs from 'fs';
+import * as path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const envPath = path.resolve(__dirname, '.env');
+const envContent = fs.readFileSync(envPath, 'utf8');
+const supabaseUrl = envContent.match(/VITE_SUPABASE_URL=(.*)/)?.[1];
+const supabaseKey = envContent.match(/VITE_SUPABASE_ANON_KEY=(.*)/)?.[1];
+
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+async function run() {
+  const { data: alerts, error: alertsErr } = await supabase.from('alerts').select('*').order('created_at', { ascending: false }).limit(5);
+  console.log('Recent Alerts:', alerts, alertsErr);
+  
+  const { data: links, error: linksErr } = await supabase.from('caregiver_patient_links').select('*');
+  console.log('Links:', links, linksErr);
+}
+run();

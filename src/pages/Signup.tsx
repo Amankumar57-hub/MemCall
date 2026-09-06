@@ -16,6 +16,9 @@ export default function Signup() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
 
+  const [otp, setOtp] = useState('')
+  const [verifying, setVerifying] = useState(false)
+
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
@@ -42,7 +45,7 @@ export default function Signup() {
       if (!authData.user) throw new Error('Failed to create user')
 
       if (authData.session === null) {
-        // Email confirmation is required
+        // Email confirmation is required, show OTP screen
         setSuccess(true)
       } else {
         // Logged in directly
@@ -60,42 +63,91 @@ export default function Signup() {
     }
   }
 
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+    setVerifying(true)
+
+    try {
+      const { data, error: verifyError } = await supabase.auth.verifyOtp({
+        email,
+        token: otp,
+        type: 'signup'
+      })
+
+      if (verifyError) throw verifyError
+      
+      if (data.session) {
+        navigate('/onboarding')
+      }
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message || 'Invalid OTP')
+      } else {
+        setError('Invalid OTP')
+      }
+    } finally {
+      setVerifying(false)
+    }
+  }
+
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#FDFDF9] font-sans p-4">
+      <div className="min-h-screen flex items-center justify-center bg-background font-sans p-4">
         <div className="max-w-md mx-auto bg-white p-8 rounded-3xl shadow-sm border border-gray-100 text-center">
-          <div className="bg-[#E1F4EA] w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
+          <div className="bg-accent w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
             <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M22 6C22 4.9 21.1 4 20 4H4C2.9 4 2 4.9 2 6M22 6V18C22 19.1 21.1 20 20 20H4C2.9 20 2 19.1 2 18V6M22 6L12 13L2 6" stroke="#144533" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M22 6C22 4.9 21.1 4 20 4H4C2.9 4 2 4.9 2 6M22 6V18C22 19.1 21.1 20 20 20H4C2.9 20 2 19.1 2 18V6M22 6L12 13L2 6" stroke="currentColor" className="text-primary" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
           </div>
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Check your email</h2>
-          <p className="text-gray-500 font-medium mb-8">
-            We've sent a verification link to <span className="font-bold text-gray-800">{email}</span>. 
-            Please click the link in the email to activate your account.
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">Enter OTP</h2>
+          <p className="text-gray-500 font-medium mb-6">
+            We've sent a verification code to <span className="font-bold text-gray-800">{email}</span>. 
+            Please enter it below to verify your account.
           </p>
-          <Link 
-            to="/login"
-            className="w-full inline-block bg-[#144533] text-white font-bold rounded-xl py-3.5 hover:bg-[#1B4D3E] transition-colors"
-          >
-            Go to Login
-          </Link>
+          
+          {error && (
+            <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-4 text-sm font-medium text-center">
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleVerifyOtp} className="space-y-4">
+            <div>
+              <input 
+                required 
+                type="text" 
+                maxLength={8}
+                value={otp} 
+                onChange={e => setOtp(e.target.value.replace(/\D/g, ''))} 
+                className="w-full border border-gray-200 text-center text-2xl tracking-[0.5em] rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary" 
+                placeholder="••••••••" 
+              />
+            </div>
+            <button disabled={verifying || otp.length < 6} type="submit" className="w-full bg-primary text-white font-bold rounded-xl py-3.5 mt-4 hover:bg-primary-hover transition-colors disabled:opacity-70">
+              {verifying ? 'Verifying...' : 'Verify Email'}
+            </button>
+          </form>
+          
+          <button onClick={() => setSuccess(false)} className="mt-6 text-sm text-gray-500 hover:text-primary font-medium">
+            Use a different email
+          </button>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#FDFDF9] font-sans p-4">
+    <div className="min-h-screen flex items-center justify-center bg-background font-sans p-4">
       <div className="w-full max-w-md text-center">
         <Link 
           to="/" 
-          className="absolute top-6 left-6 text-[#144533] flex items-center gap-2 font-medium hover:underline"
+          className="absolute top-6 left-6 text-primary flex items-center gap-2 font-medium hover:underline"
         >
           <ArrowLeft size={20} /> Back
         </Link>
 
-        <h1 className="text-4xl md:text-5xl font-bold text-[#144533] mb-6">Samriti</h1>
+        <h1 className="text-4xl md:text-5xl font-bold text-primary mb-6">Samriti</h1>
         
         <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 text-left">
           <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">Create Account</h2>
@@ -109,22 +161,22 @@ export default function Signup() {
           <form onSubmit={handleSignup} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-              <input required type="text" value={name} onChange={e => setName(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#144533]" placeholder="e.g. Anand Bora" />
+              <input required type="text" value={name} onChange={e => setName(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary" placeholder="e.g. Anand Bora" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-              <input required type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#144533]" placeholder="you@example.com" />
+              <input required type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary" placeholder="you@example.com" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-              <input required type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#144533]" placeholder="Create a password" minLength={6} />
+              <input required type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary" placeholder="Create a password" minLength={6} />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth</label>
-              <input required type="date" value={dob} onChange={e => setDob(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#144533]" />
+              <input required type="date" value={dob} onChange={e => setDob(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary" />
             </div>
             
-            <button disabled={loading} type="submit" className="w-full bg-[#144533] text-white font-bold rounded-xl py-3.5 mt-4 hover:bg-[#1B4D3E] transition-colors disabled:opacity-70">
+            <button disabled={loading} type="submit" className="w-full bg-primary text-white font-bold rounded-xl py-3.5 mt-4 hover:bg-primary-hover transition-colors disabled:opacity-70">
               {loading ? 'Creating Account...' : 'Continue'}
             </button>
 
@@ -158,7 +210,7 @@ export default function Signup() {
           
           <div className="mt-8 text-center pt-6 border-t border-gray-100">
             <p className="text-gray-500 font-medium">
-              Already have an account? <Link to="/login" className="text-[#144533] font-bold hover:underline transition-colors">Log In</Link>
+              Already have an account? <Link to="/login" className="text-primary font-bold hover:underline transition-colors">Log In</Link>
             </p>
           </div>
         </div>

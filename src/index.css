@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
   --font-sans: 'Inter', system-ui, sans-serif;
@@ -43,7 +44,7 @@
   --animate-out: out 0.3s ease-in;
 }
 
-:root {
+:root, .theme-green {
   /* Light Cream Background */
   --background: oklch(0.98 0.01 90);
   --foreground: oklch(0.2 0 0);
@@ -86,24 +87,72 @@
   --radius: 0.75rem;
 }
 
+.theme-blue {
+  --primary: oklch(0.4 0.1 250);
+  --primary-hover: oklch(0.35 0.1 250);
+  --accent: oklch(0.9 0.05 250);
+  --accent-foreground: oklch(0.4 0.1 250);
+  --ring: oklch(0.4 0.1 250);
+}
+
+.theme-purple {
+  --primary: oklch(0.4 0.1 300);
+  --primary-hover: oklch(0.35 0.1 300);
+  --accent: oklch(0.9 0.05 300);
+  --accent-foreground: oklch(0.4 0.1 300);
+  --ring: oklch(0.4 0.1 300);
+}
+
+.dark {
+  --background: oklch(0.15 0.01 90);
+  --foreground: oklch(0.95 0.01 90);
+  --card: oklch(0.2 0.01 90);
+  --card-foreground: oklch(0.95 0.01 90);
+  --popover: oklch(0.2 0.01 90);
+  --popover-foreground: oklch(0.95 0.01 90);
+  
+  /* Tone down primary for dark mode */
+  --primary: oklch(0.6 0.1 160);
+  --primary-hover: oklch(0.5 0.1 160);
+  --primary-foreground: oklch(0.1 0 0);
+  
+  --secondary: oklch(0.25 0.01 90);
+  --secondary-foreground: oklch(0.85 0.01 90);
+  
+  --muted: oklch(0.25 0.01 90);
+  --muted-foreground: oklch(0.65 0.01 90);
+  
+  --accent: oklch(0.25 0.05 160);
+  --accent-foreground: oklch(0.8 0.1 160);
+  
+  --border: oklch(0.25 0.01 90);
+  --input: oklch(0.25 0.01 90);
+}
+
+.dark.theme-blue {
+  --primary: oklch(0.6 0.1 250);
+  --primary-hover: oklch(0.5 0.1 250);
+  --accent: oklch(0.25 0.05 250);
+  --accent-foreground: oklch(0.8 0.1 250);
+}
+
+.dark.theme-purple {
+  --primary: oklch(0.6 0.1 300);
+  --primary-hover: oklch(0.5 0.1 300);
+  --accent: oklch(0.25 0.05 300);
+  --accent-foreground: oklch(0.8 0.1 300);
+}
+
 @layer base {
   * {
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground font-sans antialiased;
-    /* Soft dotted background pattern with subtle mixed color gradient (stitch effect) */
-    background: 
-      radial-gradient(circle at 10% 20%, rgba(225, 244, 234, 0.4) 0%, transparent 40%),
-      radial-gradient(circle at 90% 80%, rgba(252, 235, 215, 0.4) 0%, transparent 40%),
-      radial-gradient(var(--border) 1px, transparent 1px);
-    background-size: 100% 100%, 100% 100%, 20px 20px;
-    background-attachment: fixed;
-    background-color: var(--background);
+    @apply bg-background text-foreground font-sans antialiased transition-colors duration-300;
   }
 
   h1, h2, h3, h4, h5, h6 {
-    @apply font-sans tracking-tight text-[#2D3748];
+    @apply font-sans tracking-tight text-foreground transition-colors duration-300;
   }
 }
 

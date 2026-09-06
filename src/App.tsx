@@ -11,21 +11,34 @@ import Signup from './pages/Signup'
 import Onboarding from './pages/Onboarding'
 import Demo from './pages/Demo'
 import PatientDashboard from './pages/Patient/Dashboard'
+import PatientLayout from './pages/Patient/PatientLayout'
 import GameList from './pages/Patient/Games/GameList'
 import MemoryMatch from './pages/Patient/Games/MemoryMatch'
+import NERPatternGame from './pages/Patient/Games/NERPatternGame'
 import ShapeTracer from './pages/Patient/Games/ShapeTracer'
 import SoundRecognition from './pages/Patient/Games/SoundRecognition'
 import FamilyQuiz from './pages/Patient/Games/FamilyQuiz'
 import MemoryGarden from './pages/Patient/Games/MemoryGarden'
 import ReminderList from './pages/Patient/Reminders/ReminderList'
 import WaterReminder from './pages/Patient/Reminders/WaterReminder'
+import TaskGuideViewer from './pages/Patient/Reminders/TaskGuideViewer'
+import Reminiscence from './pages/Patient/Reminiscence'
+import MemoryJournal from './pages/Patient/MemoryJournal'
+import MyFamily from './pages/Patient/MyFamily'
+import FaceScanner from './pages/Patient/FaceScanner'
 import PatientProfile from './pages/Patient/Profile'
+import Settings from './pages/Patient/Settings'
+import Privacy from './pages/Patient/Privacy'
+import Support from './pages/Patient/Support'
 import CaregiverDashboard from './pages/Caregiver/Dashboard'
+import CaregiverProfile from './pages/Caregiver/Profile'
+import ClinicalReport from './pages/Caregiver/ClinicalReport'
 import AdminLayout from './pages/Admin/Layout'
 import AdminSetup from './pages/Admin/Setup'
 import AdminLogin from './pages/Admin/Login'
 import AdminDashboard from './pages/Admin/Dashboard'
 import AdminUsers from './pages/Admin/Users'
+import AlarmManager from './components/AlarmManager'
 import type { Session } from '@supabase/supabase-js'
 
 const queryClient = new QueryClient()
@@ -47,7 +60,7 @@ function ProtectedRoute({ children, session }: { children: React.ReactNode, sess
 }
 
 function App() {
-  const { fontSize, highContrast } = useAppStore()
+  const { fontSize, highContrast, theme, colorTheme } = useAppStore()
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -92,18 +105,22 @@ function App() {
   }, [])
 
   useEffect(() => {
-    // Apply global classes for accessibility
+    // Apply global classes for accessibility and theming
     const root = document.documentElement
     root.className = ''
-    if (highContrast) root.classList.add('dark')
+    if (highContrast || theme === 'dark') root.classList.add('dark')
+    
+    // Apply color theme
+    if (colorTheme) root.classList.add(`theme-${colorTheme}`)
+    
     if (fontSize === 'xlarge') root.classList.add('text-2xl')
     else if (fontSize === 'large') root.classList.add('text-xl')
     else root.classList.add('text-base')
-  }, [fontSize, highContrast])
+  }, [fontSize, highContrast, theme, colorTheme])
 
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center bg-[#FDFDF9]">
-      <div className="w-8 h-8 border-4 border-[#144533] border-t-transparent rounded-full animate-spin"></div>
+    return <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
     </div>
   }
 
@@ -111,6 +128,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <div className="min-h-screen bg-background text-foreground transition-colors duration-300 font-sans">
+          <AlarmManager session={session} />
           <Routes>
             <Route path="/" element={session ? <Navigate to="/patient" replace /> : <Landing />} />
             
@@ -119,18 +137,31 @@ function App() {
             <Route path="/demo" element={<Demo />} />
             <Route path="/onboarding" element={session ? <Onboarding /> : <Navigate to="/login" replace />} />
             
-            <Route path="/patient" element={<ProtectedRoute session={session}><PatientDashboard /></ProtectedRoute>} />
-            <Route path="/patient/games" element={<ProtectedRoute session={session}><GameList /></ProtectedRoute>} />
-            <Route path="/patient/games/memory" element={<ProtectedRoute session={session}><MemoryMatch /></ProtectedRoute>} />
-            <Route path="/patient/games/shape-tracer" element={<ProtectedRoute session={session}><ShapeTracer /></ProtectedRoute>} />
-            <Route path="/patient/games/sound-recognition" element={<ProtectedRoute session={session}><SoundRecognition /></ProtectedRoute>} />
-            <Route path="/patient/games/family-quiz" element={<ProtectedRoute session={session}><FamilyQuiz /></ProtectedRoute>} />
-            <Route path="/patient/games/memory-garden" element={<ProtectedRoute session={session}><MemoryGarden /></ProtectedRoute>} />
-            <Route path="/patient/reminders" element={<ProtectedRoute session={session}><ReminderList /></ProtectedRoute>} />
-            <Route path="/patient/reminders/water" element={<ProtectedRoute session={session}><WaterReminder /></ProtectedRoute>} />
-            <Route path="/patient/profile" element={<ProtectedRoute session={session}><PatientProfile /></ProtectedRoute>} />
+            <Route path="/patient" element={<ProtectedRoute session={session}><PatientLayout /></ProtectedRoute>}>
+              <Route index element={<PatientDashboard />} />
+              <Route path="games" element={<GameList />} />
+              <Route path="games/memory" element={<MemoryMatch />} />
+              <Route path="games/ner-pattern-match" element={<NERPatternGame />} />
+              <Route path="games/shape-tracer" element={<ShapeTracer />} />
+              <Route path="games/sound-recognition" element={<SoundRecognition />} />
+              <Route path="games/family-quiz" element={<FamilyQuiz />} />
+              <Route path="games/memory-garden" element={<MemoryGarden />} />
+              <Route path="reminders" element={<ReminderList />} />
+              <Route path="reminders/water" element={<WaterReminder />} />
+              <Route path="reminders/task/:guideId" element={<TaskGuideViewer />} />
+              <Route path="reminiscence" element={<Reminiscence />} />
+              <Route path="journal" element={<MemoryJournal />} />
+              <Route path="my-family" element={<MyFamily />} />
+              <Route path="face-scanner" element={<FaceScanner />} />
+              <Route path="profile" element={<PatientProfile />} />
+              <Route path="settings" element={<Settings />} />
+              <Route path="privacy" element={<Privacy />} />
+              <Route path="support" element={<Support />} />
+            </Route>
             
             <Route path="/caregiver" element={<ProtectedRoute session={session}><CaregiverDashboard /></ProtectedRoute>} />
+            <Route path="/caregiver/profile" element={<ProtectedRoute session={session}><CaregiverProfile /></ProtectedRoute>} />
+            <Route path="/caregiver/report/:patientId" element={<ProtectedRoute session={session}><ClinicalReport /></ProtectedRoute>} />
             
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<AdminDashboard />} />

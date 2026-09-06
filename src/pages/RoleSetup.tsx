@@ -79,13 +79,13 @@ export default function RoleSetup() {
   }
 
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center bg-[#FDFDF9]">
-      <Loader2 className="animate-spin text-[#1B4D3E]" size={48} />
+    return <div className="min-h-screen flex items-center justify-center bg-background">
+      <Loader2 className="animate-spin text-primary-hover" size={48} />
     </div>
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-[#FDFDF9]">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-background">
       <div className="bg-white max-w-2xl w-full rounded-3xl p-8 md:p-12 shadow-2xl border border-gray-100 text-center">
         <h1 className="text-4xl font-bold text-gray-900 mb-4">Welcome to MemCall!</h1>
         <p className="text-xl text-gray-500 mb-10">We noticed you signed in with Google. How will you be using the app today?</p>
@@ -100,10 +100,10 @@ export default function RoleSetup() {
           <button 
             disabled={saving}
             onClick={() => handleRoleSelect('patient')}
-            className="flex flex-col items-center p-8 border-2 border-gray-100 rounded-2xl hover:border-[#1B4D3E] hover:bg-[#E1F4EA] transition-all group disabled:opacity-50"
+            className="flex flex-col items-center p-8 border-2 border-gray-100 rounded-2xl hover:border-[#1B4D3E] hover:bg-accent transition-all group disabled:opacity-50"
           >
             <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-4 group-hover:bg-white group-hover:shadow-sm transition-all">
-              <Brain size={40} className="text-gray-400 group-hover:text-[#1B4D3E] transition-colors" />
+              <Brain size={40} className="text-gray-400 group-hover:text-primary-hover transition-colors" />
             </div>
             <h3 className="text-2xl font-bold text-gray-800 mb-2">I am a Patient</h3>
             <p className="text-gray-500 text-sm">I want to play games and get reminders.</p>
@@ -112,10 +112,10 @@ export default function RoleSetup() {
           <button 
             disabled={saving}
             onClick={() => handleRoleSelect('caregiver')}
-            className="flex flex-col items-center p-8 border-2 border-gray-100 rounded-2xl hover:border-[#1B4D3E] hover:bg-[#E1F4EA] transition-all group disabled:opacity-50"
+            className="flex flex-col items-center p-8 border-2 border-gray-100 rounded-2xl hover:border-[#1B4D3E] hover:bg-accent transition-all group disabled:opacity-50"
           >
             <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-4 group-hover:bg-white group-hover:shadow-sm transition-all">
-              <Heart size={40} className="text-gray-400 group-hover:text-[#1B4D3E] transition-colors" />
+              <Heart size={40} className="text-gray-400 group-hover:text-primary-hover transition-colors" />
             </div>
             <h3 className="text-2xl font-bold text-gray-800 mb-2">I am a Caregiver</h3>
             <p className="text-gray-500 text-sm">I want to help manage someone's care.</p>

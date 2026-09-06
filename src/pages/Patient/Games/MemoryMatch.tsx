@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Stage, Layer, Rect, Text, Group } from 'react-konva'
-import { ArrowLeft, RefreshCcw } from 'lucide-react'
+import { ArrowLeft, RefreshCcw, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { playClickSound } from '../../../lib/audio'
 import { supabase } from '../../../lib/supabase'
@@ -49,6 +49,7 @@ export default function MemoryMatch() {
   const { language } = useAppStore()
   
   const [currentLevel, setCurrentLevel] = useState(0)
+  const [maxUnlockedLevel, setMaxUnlockedLevel] = useState(0)
   const [cards, setCards] = useState<Card[]>([])
   const [flippedIndices, setFlippedIndices] = useState<number[]>([])
   const [matches, setMatches] = useState(0)
@@ -59,14 +60,28 @@ export default function MemoryMatch() {
   const [levelConfig, setLevelConfig] = useState(MEMORY_MATCH_LEVELS[0])
 
   useEffect(() => {
-    // Load saved level from localStorage
-    const savedLevel = localStorage.getItem('memory_match_level')
-    if (savedLevel) {
-      const parsed = parseInt(savedLevel)
-      if (!isNaN(parsed) && parsed >= 0 && parsed < 25) {
-        setCurrentLevel(parsed)
+    const fetchProgress = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          const { data } = await supabase
+            .from('game_progress')
+            .select('highest_level')
+            .eq('user_id', user.id)
+            .eq('game_id', 'memory-match')
+            .maybeSingle()
+          
+          if (data && data.highest_level) {
+            const maxLevel = Math.min(data.highest_level - 1, 24)
+            setMaxUnlockedLevel(maxLevel)
+            setCurrentLevel(maxLevel)
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching progress:', err)
       }
     }
+    fetchProgress()
     
     const handleResize = () => setWindowWidth(window.innerWidth)
     window.addEventListener('resize', handleResize)
@@ -118,49 +133,61 @@ export default function MemoryMatch() {
       
       const { data: userData } = await supabase.auth.getUser()
       if (userData.user) {
-        let gameId = 'memory-match-uuid-placeholder';
-        if (navigator.onLine) {
-          const { data: gameData } = await supabase
-            .from('games')
-            .select('id')
-            .eq('slug', 'memory-match')
-            .single()
-          if (gameData) gameId = gameData.id;
-        }
+        let gameId = 'memory-match';
 
+        // 1. Save Session to game_sessions (if it exists)
         const payload = {
           patient_id: userData.user.id,
           game_id: gameId,
-          difficulty_level: currentLevel + 1,
           score: score,
-          questions_attempted: levelConfig.pairs,
-          questions_correct: levelConfig.pairs,
-          hints_used: 0,
-          duration_seconds: durationSeconds,
-          completed: true
+          duration_seconds: durationSeconds
         };
           
         if (navigator.onLine) {
-          await supabase.from('game_sessions').insert(payload)
-        } else {
-          const { db } = await import('../../../lib/db');
-          await db.sync_queue.add({
-            table_name: 'game_sessions',
-            operation: 'INSERT',
-            payload: payload,
-            created_at: new Date().toISOString(),
-            status: 'pending'
-          });
+          try {
+            await supabase.from('game_sessions').insert(payload)
+          } catch (e) {
+            console.error('game_sessions insert failed', e)
+          }
+          
+          // 2. Update Progress in game_progress
+          const nextLevel = Math.min(currentLevel + 1, 24)
+          const newMaxLevel = Math.max(maxUnlockedLevel, nextLevel)
+          
+          try {
+            // First fetch existing to calculate totals
+            const { data: existingProgress } = await supabase
+              .from('game_progress')
+              .select('*')
+              .eq('user_id', userData.user.id)
+              .eq('game_id', gameId)
+              .maybeSingle()
+              
+            const progressPayload = {
+              user_id: userData.user.id,
+              game_id: gameId,
+              highest_level: newMaxLevel + 1,
+              total_games_played: (existingProgress?.total_games_played || 0) + 1,
+              total_score: (existingProgress?.total_score || 0) + score,
+              updated_at: new Date().toISOString()
+            }
+            
+            await supabase.from('game_progress').upsert(progressPayload, { onConflict: 'user_id,game_id' })
+            
+            if (newMaxLevel > maxUnlockedLevel) {
+              setMaxUnlockedLevel(newMaxLevel)
+            }
+          } catch (e) {
+            console.error('game_progress upsert failed', e)
+          }
         }
       }
       
       setGameSaved(true)
       
-      // Advance level
+      // Advance level internally
       if (currentLevel < 24) {
-        const nextLevel = currentLevel + 1
-        setCurrentLevel(nextLevel)
-        localStorage.setItem('memory_match_level', nextLevel.toString())
+        setCurrentLevel(currentLevel + 1)
       }
     } catch (error) {
       console.error("Error saving game session:", error)
@@ -223,18 +250,34 @@ export default function MemoryMatch() {
   const stageHeight = (cardSize * rows) + ((rows - 1) * 10) + 10
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#FDFDF9]">
+    <div className="flex flex-col min-h-screen bg-background">
       <header className="px-6 py-4 flex items-center justify-between border-b border-gray-100 bg-white sticky top-0 z-10 shadow-sm">
-        <Link to="/patient/games" className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors text-[#144533]">
+        <Link to="/patient/games" className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors text-primary">
           <ArrowLeft size={24} />
         </Link>
         <div className="flex flex-col items-center">
-          <h1 className="text-xl font-bold text-[#144533]">{t('Memory Match', language)}</h1>
-          <span className="text-xs font-bold bg-[#E1F4EA] text-[#1B4D3E] px-2 py-0.5 rounded-full">
-            Level {currentLevel + 1}/25
-          </span>
+          <h1 className="text-xl font-bold text-primary">{t('Memory Match', language)}</h1>
+          <div className="flex items-center gap-2 mt-1">
+            <button 
+              disabled={currentLevel === 0}
+              onClick={() => setCurrentLevel(l => l - 1)}
+              className="p-1 rounded-full text-primary-hover hover:bg-gray-100 disabled:opacity-30 transition-colors"
+            >
+              <ChevronLeft size={18} />
+            </button>
+            <span className="text-xs font-bold bg-accent text-primary-hover px-2 py-0.5 rounded-full min-w-[70px] text-center">
+              Level {currentLevel + 1}/25
+            </span>
+            <button 
+              disabled={currentLevel >= maxUnlockedLevel}
+              onClick={() => setCurrentLevel(l => l + 1)}
+              className="p-1 rounded-full text-primary-hover hover:bg-gray-100 disabled:opacity-30 transition-colors"
+            >
+              <ChevronRight size={18} />
+            </button>
+          </div>
         </div>
-        <button onClick={initializeGame} className="p-2 text-[#144533] hover:bg-gray-100 rounded-full transition-colors">
+        <button onClick={initializeGame} className="p-2 text-primary hover:bg-gray-100 rounded-full transition-colors">
           <RefreshCcw size={24} />
         </button>
       </header>
@@ -242,7 +285,7 @@ export default function MemoryMatch() {
       <main className="flex-1 flex flex-col items-center justify-center p-4">
         {matches > 0 && matches === levelConfig.pairs ? (
           <div className="text-center bg-white p-8 rounded-3xl shadow-sm border border-gray-100 max-w-sm w-full animate-in zoom-in duration-500">
-            <h2 className="text-4xl font-bold text-[#144533] mb-4">{t('Well Done!', language)} 🎉</h2>
+            <h2 className="text-4xl font-bold text-primary mb-4">{t('Well Done!', language)} 🎉</h2>
             <p className="text-lg text-gray-600 mb-2">{t('You found all the matches.', language)}</p>
             {isSaving ? (
               <p className="text-sm text-gray-400 mb-8 italic">{t('Saving progress...', language)}</p>
@@ -256,17 +299,17 @@ export default function MemoryMatch() {
             )}
             <button 
               onClick={initializeGame}
-              className="w-full bg-[#1B4D3E] text-white px-8 py-4 rounded-full text-xl font-bold hover:bg-[#13382D] transition-colors shadow-md active:scale-[0.98]"
+              className="w-full bg-primary-hover text-white px-8 py-4 rounded-full text-xl font-bold hover:bg-primary-hover transition-colors shadow-md active:scale-[0.98]"
             >
               {currentLevel < 24 ? t('Next Level', language) : t('Play Again', language)}
             </button>
-            <Link to="/patient/games" className="block mt-4 text-[#144533] font-bold hover:underline">
+            <Link to="/patient/games" className="block mt-4 text-primary font-bold hover:underline">
               {t('Back to Games', language)}
             </Link>
           </div>
         ) : (
           <div className="w-full flex flex-col items-center">
-            <div className="text-center mb-6 text-xl font-bold text-[#144533] bg-white px-6 py-2 rounded-full shadow-sm border border-gray-100">
+            <div className="text-center mb-6 text-xl font-bold text-primary bg-white px-6 py-2 rounded-full shadow-sm border border-gray-100">
               {t('Matches', language)}: {matches} / {levelConfig.pairs}
             </div>
             
@@ -318,7 +361,7 @@ export default function MemoryMatch() {
                 </Layer>
               </Stage>
             </div>
-            <p className="mt-8 text-center text-gray-500 font-medium max-w-xs">
+            <p className="mt-8 text-center text-gray-500 dark:text-gray-300 font-medium max-w-xs">
               {t('Tap any two cards to reveal them and find matching pairs.', language)}
             </p>
           </div>
