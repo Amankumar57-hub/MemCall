@@ -105,14 +105,14 @@ serve(async (req) => {
     if (imageBase64) {
       // Analyze Face Logic
       const { data: familyMembers } = await supabase
-        .from("family_photos")
-        .select("name, relation, image_url")
-        .eq("patient_id", user.id)
+        .from("family_members")
+        .select("name, relation, avatar_url")
+        .eq("user_id", user.id)
 
       let contextText = "Family Members Context:\n"
       if (familyMembers && familyMembers.length > 0) {
         familyMembers.forEach(member => {
-          contextText += `- ${member.name} (Relation: ${member.relation}) [Photo URL: ${member.image_url}]\n`
+          contextText += `- ${member.name} (Relation: ${member.relation}) [Photo URL: ${member.avatar_url}]\n`
         })
       } else {
         contextText += "No family members registered."
@@ -129,7 +129,7 @@ If you can confidently match the person in the webcam image to any of the provid
 Example: "Yes, that is your grandson Rohan! He has come to visit you."
 
 If you cannot recognize the person, or there are no family members provided, say:
-"I am not entirely sure, but they look very friendly. You can ask them their name."
+"this photo is not available in your file"
 
 Reply in ${language === 'hi' ? 'Hindi (Devanagari script)' : language === 'mr' ? 'Marathi' : 'English'}.
 Keep your response short (1-2 sentences), sweet, and direct.

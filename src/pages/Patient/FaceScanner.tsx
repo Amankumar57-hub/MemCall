@@ -4,6 +4,8 @@ import { ArrowLeft, Camera, Loader2, Volume2, Maximize } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAppStore } from '../../store/useAppStore';
 import { t } from '../../lib/i18n';
+import { Network } from '@capacitor/network';
+import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { playPremiumVoice } from '../../lib/tts';
 
 export default function FaceScanner() {
@@ -50,6 +52,7 @@ export default function FaceScanner() {
 
   const captureAndAnalyze = async () => {
     if (!videoRef.current || !canvasRef.current) return;
+    try { Haptics.impact({ style: ImpactStyle.Light }); } catch (e) {}
     
     setIsScanning(true);
     setResult(null);
@@ -90,21 +93,68 @@ export default function FaceScanner() {
       stopCamera();
       
       try {
-        const { data, error: invokeError } = await supabase.functions.invoke('ai-assistant', {
-          body: { imageBase64: base64Image, language }
-        });
+        setResult(t('Analyzing face...', language));
         
-        if (invokeError) throw new Error(invokeError.message);
+        const { loadFaceModels } = await import('../../lib/syncFamilyMembers');
+        const { db } = await import('../../lib/db');
         
-        if (data?.reply) {
-          setResult(data.reply);
-          playPremiumVoice(data.reply, language);
-        } else {
-          throw new Error('No response from AI');
+        const isLoaded = await loadFaceModels();
+        if (!isLoaded) throw new Error("Models not loaded");
+
+        // Detect face in captured image
+        const img = new Image();
+        img.src = base64Image;
+        await new Promise(r => img.onload = r);
+        
+        const detection = await (window as any).faceapi.detectSingleFace(img).withFaceLandmarks().withFaceDescriptor();
+        
+        if (!detection) {
+          const msg = language === 'hi' ? "कोई चेहरा नहीं दिखा।" : "No face detected.";
+          setResult(msg);
+          playPremiumVoice(msg, language === 'hi' ? 'hi-IN-Neural2-B' : 'en-US-Neural2-F');
+          setIsScanning(false);
+          return;
         }
-      } catch (err) {
-        console.error(err);
-        setError(t('Sorry, I could not connect to the network right now.', language));
+
+        // Match against Dexie database
+        const familyMembers = await db.family_members.toArray();
+        let bestMatch = null;
+        let minDistance = 0.55; // Threshold for face matching
+
+        for (const member of familyMembers) {
+          if (member.face_descriptor) {
+            const desc1 = new Float32Array(member.face_descriptor);
+            const desc2 = detection.descriptor;
+            const distance = (window as any).faceapi.euclideanDistance(desc1, desc2);
+            
+            if (distance < minDistance) {
+              minDistance = distance;
+              bestMatch = member;
+            }
+          }
+        }
+
+        if (bestMatch) {
+          const relText = bestMatch.relation ? `${bestMatch.relation}` : 'family member';
+          const msg = language === 'hi' 
+            ? `ये आपके ${relText} ${bestMatch.name} हैं।` 
+            : `This is your ${relText}, ${bestMatch.name}.`;
+          setResult(msg);
+          playPremiumVoice(msg, language === 'hi' ? 'hi-IN-Neural2-B' : 'en-US-Neural2-F');
+        } else {
+          const msg = language === 'hi' 
+            ? "मैं इस व्यक्ति को नहीं पहचान पाया।" 
+            : "I couldn't recognize this person from your family list.";
+          setResult(msg);
+          playPremiumVoice(msg, language === 'hi' ? 'hi-IN-Neural2-B' : 'en-US-Neural2-F');
+        }
+      } catch(err) {
+        console.error('Face scanning error:', err);
+        const errorMsg = language === 'hi' 
+          ? "फेस स्कैनिंग में त्रुटि। कृपया 'मेरी फैमिली' में फोटो चेक करें।"
+          : "Error in face scanning. Please check 'My Family' photos.";
+        setError(errorMsg);
+        playPremiumVoice(errorMsg, language === 'hi' ? 'hi-IN-Neural2-B' : 'en-US-Neural2-F');
       } finally {
         setIsScanning(false);
       }

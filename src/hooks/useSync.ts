@@ -54,8 +54,20 @@ export function useSync() {
           if (item.operation === 'INSERT') {
             const { error } = await supabase.from(item.table_name).insert(item.payload);
             if (error) throw error;
-          } 
-          // Other operations (UPDATE/DELETE) can be handled here if needed in the future
+          } else if (item.operation === 'DELETE') {
+            let query = supabase.from(item.table_name).delete();
+            // apply payload as equality conditions
+            for (const key in item.payload) {
+              if (key.endsWith('_gte')) {
+                query = query.gte(key.replace('_gte', ''), item.payload[key]);
+              } else {
+                query = query.eq(key, item.payload[key]);
+              }
+            }
+            const { error } = await query;
+            if (error) throw error;
+          }
+          // Other operations (UPDATE) can be handled here if needed in the future
 
           // Success: remove from local queue
           if (item.id) {

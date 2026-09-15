@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate, Outlet, useLocation } from 'react-router-dom'
-import { Bell, User, Mic, Heart, Brain, CalendarCheck, Loader2, Settings, X, Volume2, Sparkles } from 'lucide-react'
+import { Bell, User, Mic, Heart, Brain, CalendarCheck, Loader2, Settings, X, Volume2, Sparkles, AlertTriangle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
 import { useVoiceCommand } from '../../hooks/useVoiceCommand'
@@ -43,6 +43,20 @@ export default function PatientLayout() {
     }
     loadRemindersForVoice()
   }, [location.pathname])
+
+  // Auto-Greeting / Voice Onboarding
+  useEffect(() => {
+    if (!sessionStorage.getItem('has_greeted_patient')) {
+      sessionStorage.setItem('has_greeted_patient', 'true')
+      const greeting = language === 'hi' 
+        ? "सुप्रभात, मैं मेमकॉल हूँ। मुझसे बात करने के लिए नीचे दिए गए बटन को दबाएं, या किसी को पहचानने के लिए हरा कैमरा बटन दबाएं।"
+        : "Hello, I am MemCall. Tap the microphone button below to talk to me, or tap the green camera to scan a face."
+      // Small delay to ensure voices are loaded and UI is ready
+      setTimeout(() => {
+        playPremiumVoice(greeting, language)
+      }, 1500)
+    }
+  }, [language])
 
   const readAloud = (text: string) => {
     playPremiumVoice(text, language)
@@ -630,6 +644,19 @@ export default function PatientLayout() {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <button 
+            onClick={() => {
+              const num = localStorage.getItem('familyCallNumber');
+              if (num) {
+                window.location.href = `tel:${num}`;
+              } else {
+                navigate('/patient');
+              }
+            }}
+            className="p-3 bg-red-100 dark:bg-red-900/30 shadow-sm text-red-600 dark:text-red-400 rounded-full border border-red-200 dark:border-red-800/50 transition-colors hover:bg-red-200 dark:hover:bg-red-900/50 animate-pulse"
+          >
+            <AlertTriangle size={20} />
+          </button>
           <button 
             onClick={() => navigate('/patient/settings')}
             className="p-3 bg-white dark:bg-card shadow-sm text-gray-600 dark:text-gray-300 rounded-full border border-gray-100 dark:border-border transition-colors hover:bg-gray-50 dark:hover:bg-primary/20"

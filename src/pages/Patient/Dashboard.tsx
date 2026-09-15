@@ -4,10 +4,15 @@ import { Calendar, Brain, User, Music, ShieldAlert, Phone, Sun, Pill, CalendarCh
 import { supabase } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
 import { Geolocation } from '@capacitor/geolocation'
-import { Capacitor } from '@capacitor/core'
+import { Network } from '@capacitor/network'
+import { Capacitor } from '@capacitor/core';
+import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { t } from '../../lib/i18n'
+import { db } from '../../lib/db'
+import { useSync } from '../../hooks/useSync'
 
 export default function PatientDashboard() {
+  const { isOnline } = useSync()
   const [currentTime, setCurrentTime] = useState(new Date())
   const [loading, setLoading] = useState(true)
   const [profile, setProfile] = useState<any>(null)
@@ -66,6 +71,10 @@ export default function PatientDashboard() {
       const { data: userProfile } = await supabase.from('users').select('*').eq('id', user.id).single()
       if (userProfile) {
         setProfile(userProfile)
+        // Run background face sync for offline recognition
+        import('../../lib/syncFamilyMembers').then(module => {
+          module.syncFamilyMembers(user.id).catch(err => console.error('Face sync error:', err));
+        });
       }
       
       const { data: linkData } = await supabase.from('caregiver_patient_links').select('caregiver_id').eq('patient_id', user.id).eq('status', 'active').limit(1)
@@ -117,6 +126,7 @@ export default function PatientDashboard() {
 
   const handleToggleTask = async (taskId: string) => {
     if (!profile?.id) return;
+    try { Haptics.impact({ style: ImpactStyle.Light }); } catch (e) {}
     const isCompleted = completedTaskIds.includes(taskId);
     
     try {
@@ -127,24 +137,45 @@ export default function PatientDashboard() {
         // Remove from DB for today
         const today = new Date();
         today.setHours(0,0,0,0);
-        await supabase
-          .from('reminder_logs')
-          .delete()
-          .eq('reminder_id', taskId)
-          .eq('patient_id', profile.id)
-          .gte('acknowledged_at', today.toISOString());
+        
+        if (!navigator.onLine) {
+           await db.sync_queue.add({
+             table_name: 'reminder_logs',
+             operation: 'DELETE',
+             payload: { reminder_id: taskId, patient_id: profile.id, acknowledged_at_gte: today.toISOString() },
+             status: 'pending',
+             created_at: new Date().toISOString()
+           });
+        } else {
+           await supabase
+             .from('reminder_logs')
+             .delete()
+             .eq('reminder_id', taskId)
+             .eq('patient_id', profile.id)
+             .gte('acknowledged_at', today.toISOString());
+        }
       } else {
         // Optimistic UI update
         setCompletedTaskIds(prev => [...prev, taskId]);
         
         // Add to DB
-        await supabase
-          .from('reminder_logs')
-          .insert({
-            reminder_id: taskId,
-            patient_id: profile.id,
-            status: 'completed'
-          });
+        if (!navigator.onLine) {
+           await db.sync_queue.add({
+             table_name: 'reminder_logs',
+             operation: 'INSERT',
+             payload: { reminder_id: taskId, patient_id: profile.id, status: 'completed' },
+             status: 'pending',
+             created_at: new Date().toISOString()
+           });
+        } else {
+           await supabase
+             .from('reminder_logs')
+             .insert({
+               reminder_id: taskId,
+               patient_id: profile.id,
+               status: 'completed'
+             });
+        }
       }
     } catch (e) {
       console.error("Failed to toggle task", e);
@@ -287,30 +318,54 @@ export default function PatientDashboard() {
   const triggerEmergency = async () => {
     if (!profile?.id) return;
     
-    // ALWAYS fetch the latest caregiver link right before sending the alert
-    // This prevents sending alerts to old caregivers if the user didn't refresh their page
-    let currentCaregiverId = null;
-    const { data: linkData } = await supabase
-      .from('caregiver_patient_links')
-      .select('caregiver_id')
-      .eq('patient_id', profile.id)
-      .eq('status', 'active')
-      .order('created_at', { ascending: false })
-      .limit(1);
-      
-    if (linkData && linkData.length > 0) {
-      currentCaregiverId = linkData[0].caregiver_id;
-      setLinkedCaregiverId(currentCaregiverId);
-    }
-    
-    if (!currentCaregiverId) {
-      setActiveEmergencyAlert('demo-emergency-active');
-      setEmergencySeconds(0);
-      setEmergencyAcknowledged(false);
-      return;
-    }
-    
     try {
+      // PHASE 1: Check Network Connection First
+      const status = await Network.getStatus();
+      
+      if (!status.connected) {
+        // OFFLINE FALLBACK - SEND SMS
+        if (familyCallNumber) {
+          const smsBody = `EMERGENCY SOS from ${profile?.full_name || 'your patient'}! I need help immediately!`;
+          
+          setActiveEmergencyAlert('offline-sms-emergency');
+          setEmergencySeconds(0);
+          setEmergencyAcknowledged(false);
+          
+          window.location.href = `sms:${familyCallNumber}?body=${encodeURIComponent(smsBody)}`;
+          return;
+        } else {
+          setActiveEmergencyAlert('offline-sms-emergency');
+          setEmergencySeconds(0);
+          setEmergencyAcknowledged(false);
+          alert("Warning: No internet connection and no emergency contact number is configured in Settings.");
+          return;
+        }
+      }
+
+      // ONLINE - Standard Supabase Alert
+      // ALWAYS fetch the latest caregiver link right before sending the alert
+      // This prevents sending alerts to old caregivers if the user didn't refresh their page
+      let currentCaregiverId = null;
+      const { data: linkData } = await supabase
+        .from('caregiver_patient_links')
+        .select('caregiver_id')
+        .eq('patient_id', profile.id)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
+        .limit(1);
+        
+      if (linkData && linkData.length > 0) {
+        currentCaregiverId = linkData[0].caregiver_id;
+        setLinkedCaregiverId(currentCaregiverId);
+      }
+      
+      if (!currentCaregiverId) {
+        setActiveEmergencyAlert('demo-emergency-active');
+        setEmergencySeconds(0);
+        setEmergencyAcknowledged(false);
+        return;
+      }
+      
       const { data, error } = await supabase.from('alerts').insert({
         caregiver_id: currentCaregiverId,
         patient_id: profile.id,
@@ -326,9 +381,19 @@ export default function PatientDashboard() {
       setEmergencyAcknowledged(false);
     } catch (e) {
       console.error('Failed to trigger emergency', e);
-      setActiveEmergencyAlert('demo-emergency-active');
-      setEmergencySeconds(0);
-      setEmergencyAcknowledged(false);
+      
+      // Failsafe fallback
+      if (familyCallNumber) {
+        const smsBody = `EMERGENCY SOS from ${profile?.full_name || 'your patient'}! I need help immediately!`;
+        setActiveEmergencyAlert('offline-sms-emergency');
+        setEmergencySeconds(0);
+        setEmergencyAcknowledged(false);
+        window.location.href = `sms:${familyCallNumber}?body=${encodeURIComponent(smsBody)}`;
+      } else {
+        setActiveEmergencyAlert('demo-emergency-active');
+        setEmergencySeconds(0);
+        setEmergencyAcknowledged(false);
+      }
     }
   };
 
@@ -416,11 +481,21 @@ export default function PatientDashboard() {
     if (profile?.id && !isSavingMood) {
       setIsSavingMood(true);
       try {
-        const { error } = await supabase.from('mood_history').insert({
-          user_id: profile.id,
-          mood: englishMood
-        });
-        if (error) throw error;
+        if (!navigator.onLine) {
+          await db.sync_queue.add({
+            table_name: 'mood_history',
+            operation: 'INSERT',
+            payload: { user_id: profile.id, mood: englishMood },
+            status: 'pending',
+            created_at: new Date().toISOString()
+          });
+        } else {
+          const { error } = await supabase.from('mood_history').insert({
+            user_id: profile.id,
+            mood: englishMood
+          });
+          if (error) throw error;
+        }
       } catch (e) {
         console.error('Failed to save mood', e);
       } finally {
@@ -569,19 +644,19 @@ export default function PatientDashboard() {
              <div className="flex justify-between px-2">
                 <div className={`flex flex-col items-center ${completedTaskIds.length > 0 && dailyTasks.filter(t => t.type === 'medicine').every(t => completedTaskIds.includes(t.id)) ? '' : 'opacity-50'}`}>
                    <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-[#10B981] rounded-full flex items-center justify-center mb-2 border-2 border-transparent dark:border-[#10B981]/50"><CheckCircle2 size={24} /></div>
-                   <span className="text-xs font-medium text-gray-600 dark:text-[#94A3B8] text-center leading-tight">Medicine<br/>Taken</span>
+                   <span className="text-xs font-medium text-gray-600 dark:text-[#94A3B8] text-center leading-tight">{t('Medicine', language)}<br/>{t('Taken', language)}</span>
                 </div>
                 <div className={`flex flex-col items-center opacity-50`}>
                    <div className="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-[#F59E0B] rounded-full flex items-center justify-center mb-2 border-2 border-transparent dark:border-[#F59E0B]/50"><CalendarCheck size={24} /></div>
-                   <span className="text-xs font-medium text-gray-600 dark:text-[#94A3B8] text-center leading-tight">Meals<br/>--</span>
+                   <span className="text-xs font-medium text-gray-600 dark:text-[#94A3B8] text-center leading-tight">{t('Meals', language)}<br/>--</span>
                 </div>
                 <div onClick={() => setShowTasksModal(true)} className={`flex flex-col items-center cursor-pointer transition-transform hover:scale-105 ${completedTaskIds.length >= dailyTasks.length && dailyTasks.length > 0 ? '' : 'opacity-50'}`}>
                    <div className={`w-12 h-12 ${completedTaskIds.length >= dailyTasks.length && dailyTasks.length > 0 ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-[#94A3B8]'} rounded-full flex items-center justify-center mb-2`}><User size={24} /></div>
-                   <span className="text-xs font-medium text-gray-600 dark:text-[#94A3B8] text-center leading-tight">Activity<br/>{completedTaskIds.length}/{dailyTasks.length}</span>
+                   <span className="text-xs font-medium text-gray-600 dark:text-[#94A3B8] text-center leading-tight">{t('Activity', language)}<br/>{completedTaskIds.length}/{dailyTasks.length}</span>
                 </div>
                 <div className={`flex flex-col items-center ${todayGameMinutes >= 15 ? '' : 'opacity-50'}`}>
                    <div className={`w-12 h-12 ${todayGameMinutes >= 15 ? 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400' : 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-[#94A3B8]'} rounded-full flex items-center justify-center mb-2`}><Brain size={24} /></div>
-                   <span className="text-xs font-medium text-gray-600 dark:text-[#94A3B8] text-center leading-tight">Games<br/>{todayGameMinutes} min</span>
+                   <span className="text-xs font-medium text-gray-600 dark:text-[#94A3B8] text-center leading-tight">{t('Games', language)}<br/>{todayGameMinutes} {t('min', language)}</span>
                 </div>
              </div>
            </div>

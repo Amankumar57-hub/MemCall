@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Plus, Bell, LogOut, Settings as SettingsIcon, CheckCircle2, ChevronRight, X, Loader2, RefreshCw, User, Award, Activity, Play, Mail, Clock, Calendar, ArrowLeft, Trash2, ShieldAlert, Heart, FileText, BookOpen } from 'lucide-react'
+import { Plus, Bell, LogOut, Settings as SettingsIcon, CheckCircle2, ChevronRight, X, Loader2, RefreshCw, User, Award, Activity, Play, Mail, Clock, Calendar, ArrowLeft, Trash2, ShieldAlert, Heart, FileText, BookOpen, Sparkles } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
 import { t } from '../../lib/i18n'
@@ -81,6 +81,9 @@ export default function CaregiverDashboard() {
   
   const [emergencyAlert, setEmergencyAlert] = useState<{id: string, message: string} | null>(null)
   const alarmAudioRef = useRef<HTMLAudioElement | null>(null)
+
+  const [aiSummary, setAiSummary] = useState<string | null>(null)
+  const [loadingSummary, setLoadingSummary] = useState(false)
 
   const loadDashboardData = async () => {
     try {
@@ -264,6 +267,24 @@ export default function CaregiverDashboard() {
       supabase.removeChannel(locationChannel);
     };
   }, [selectedPatientId])
+
+  const generateAiInsights = async () => {
+    if (!selectedPatientId) return;
+    setLoadingSummary(true);
+    setAiSummary(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('caregiver-summary', {
+        body: { patient_id: selectedPatientId, language }
+      });
+      if (error) throw error;
+      setAiSummary(data.summary);
+    } catch (e) {
+      console.error(e);
+      setAiSummary(language === 'hi' ? "AI रिपोर्ट जनरेट करने में त्रुटि।" : "Failed to generate AI insights.");
+    } finally {
+      setLoadingSummary(false);
+    }
+  };
 
   // Request notification permissions
   useEffect(() => {
@@ -601,6 +622,13 @@ export default function CaregiverDashboard() {
               </div>
               <div className="flex flex-col sm:flex-row items-center gap-2">
                 <button 
+                  onClick={generateAiInsights}
+                  disabled={loadingSummary}
+                  className="bg-purple-50 text-purple-600 px-4 py-2 rounded-full font-bold hover:bg-purple-100 transition-colors text-sm flex items-center gap-2 shadow-sm w-full sm:w-auto disabled:opacity-50">
+                  {loadingSummary ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                  {t('AI Insights', language) || 'AI Insights'}
+                </button>
+                <button 
                   onClick={() => window.open(`/caregiver/report/${selectedPatient.id}`, '_blank')}
                   className="bg-indigo-50 text-indigo-600 px-4 py-2 rounded-full font-bold hover:bg-indigo-100 transition-colors text-sm flex items-center gap-2 shadow-sm w-full sm:w-auto">
                   <FileText size={16} /> {t('Download Report', language)}
@@ -617,6 +645,21 @@ export default function CaregiverDashboard() {
                 </button>
               </div>
             </div>
+
+            {aiSummary && (
+              <div className="mb-6 p-4 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-100 rounded-2xl shadow-sm relative overflow-hidden animate-in fade-in slide-in-from-top-2">
+                <div className="absolute -right-4 -top-4 text-purple-200/50"><Sparkles size={100} /></div>
+                <div className="relative z-10 flex gap-4">
+                  <div className="w-10 h-10 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center shrink-0">
+                    <Sparkles size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-purple-900 mb-1">{t('AI Insights', language) || 'AI Insights'}</h3>
+                    <p className="text-sm text-purple-800 leading-relaxed font-medium">{aiSummary}</p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
               {/* Patient Stats Card */}

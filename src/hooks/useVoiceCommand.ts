@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
+import { Haptics, ImpactStyle } from '@capacitor/haptics';
 
 // SpeechRecognition type definitions for TypeScript
 declare global {
@@ -16,12 +17,18 @@ export function useVoiceCommand(lang: string = 'en-IN') {
   
   const recognitionRef = useRef<any>(null);
   const interimRef = useRef<string>('');
+  const silenceTimeoutRef = useRef<any>(null);
 
   const startListening = useCallback((overrideLang?: string) => {
+    try { Haptics.impact({ style: ImpactStyle.Light }); } catch (e) {}
     setError(null);
     setTranscript('');
     setInterimTranscript('');
     interimRef.current = '';
+    
+    if (silenceTimeoutRef.current) {
+      clearTimeout(silenceTimeoutRef.current);
+    }
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     
@@ -65,10 +72,19 @@ export function useVoiceCommand(lang: string = 'en-IN') {
         setTranscript(cleaned.toLowerCase());
         setInterimTranscript('');
         interimRef.current = '';
+        if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
       } else if (interimStr) {
         const cleaned = interimStr.trim();
         setInterimTranscript(cleaned.toLowerCase());
         interimRef.current = cleaned.toLowerCase();
+        
+        // Auto-submit after 2.5 seconds of silence if continuous/interim gets stuck (common in Hindi/regional languages)
+        if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
+        silenceTimeoutRef.current = setTimeout(() => {
+          if (recognitionRef.current) {
+            try { recognitionRef.current.stop(); } catch (e) {}
+          }
+        }, 2500);
       }
     };
 
@@ -86,6 +102,7 @@ export function useVoiceCommand(lang: string = 'en-IN') {
 
     recognition.onend = () => {
       setIsListening(false);
+      if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
       // Fallback: If interim had words but onresult didn't emit final before onend
       if (interimRef.current) {
         setTranscript(interimRef.current);
@@ -116,6 +133,8 @@ export function useVoiceCommand(lang: string = 'en-IN') {
   }, [lang]);
 
   const stopListening = useCallback(() => {
+    try { Haptics.impact({ style: ImpactStyle.Light }); } catch (e) {}
+    if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();

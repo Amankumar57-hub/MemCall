@@ -13,6 +13,8 @@ declare global {
   }
 }
 
+import { db } from '../../lib/db';
+
 export default function MemoryJournal() {
   const navigate = useNavigate();
   const { language } = useAppStore();
@@ -25,19 +27,43 @@ export default function MemoryJournal() {
 
   useEffect(() => {
     const fetchProfileAndJournals = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
-      
-      const { data: user } = await supabase.from('users').select('*').eq('id', session.user.id).single();
-      setProfile(user);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+        
+        const { data: user } = await supabase.from('users').select('*').eq('id', session.user.id).single();
+        setProfile(user);
 
-      if (user) {
-        const { data: j } = await supabase
-          .from('patient_journals')
-          .select('*')
-          .eq('patient_id', user.id)
-          .order('created_at', { ascending: false });
-        if (j) setJournals(j);
+        if (user) {
+          try {
+            // ONLINE: Fetch from Supabase
+            const { data: j, error } = await supabase
+              .from('patient_journals')
+              .select('*')
+              .eq('patient_id', user.id)
+              .order('created_at', { ascending: false });
+              
+            if (error) throw error;
+            
+            if (j) {
+              setJournals(j);
+              // Save to local IndexedDB for offline access
+              await db.patient_journals.clear();
+              await db.patient_journals.bulkAdd(j);
+            }
+          } catch (netError) {
+            // OFFLINE: Fetch from Dexie
+            console.log('Network error, fetching journals from local DB', netError);
+            const localJournals = await db.patient_journals
+              .where('patient_id')
+              .equals(user.id)
+              .reverse()
+              .sortBy('created_at');
+            setJournals(localJournals);
+          }
+        }
+      } catch (err) {
+        console.error("Auth error", err);
       }
     };
     fetchProfileAndJournals();
@@ -112,46 +138,67 @@ export default function MemoryJournal() {
     }
 
     try {
-      // Send to AI for mood analysis
-      const { data: aiResponse, error: aiError } = await supabase.functions.invoke('ai-assistant', {
-        body: { 
-          prompt: `Analyze the following diary entry from a dementia patient and determine their primary mood. Reply in strict JSON format with two keys: "mood" (string, strictly one of: happy, sad, anxious, confused, neutral) and "summary" (a short 1-sentence summary of what they talked about in English).\n\nEntry: "${transcript}"` 
-        }
-      });
-
-      let aiMood = 'neutral';
-      let aiSummary = 'No summary available';
-
-      if (aiResponse && !aiError) {
-        try {
-          // Attempt to parse JSON from AI response if it wrapped it in markdown or directly returned it
-          let rawJson = aiResponse.reply || aiResponse.response || '{}';
-          if (rawJson.includes('```json')) {
-            rawJson = rawJson.split('```json')[1].split('```')[0].trim();
-          } else if (rawJson.includes('```')) {
-            rawJson = rawJson.split('```')[1].trim();
+      if (!navigator.onLine) {
+        const offlineJournal = {
+          patient_id: profile.id,
+          transcription: transcript,
+          ai_mood: 'neutral',
+          ai_summary: 'Saved Offline',
+          created_at: new Date().toISOString()
+        };
+        
+        await db.sync_queue.add({
+          table_name: 'patient_journals',
+          operation: 'INSERT',
+          payload: offlineJournal,
+          status: 'pending',
+          created_at: new Date().toISOString()
+        });
+        
+        // Optimistic UI update for offline mode
+        setJournals([{id: 'offline-' + Date.now(), ...offlineJournal}, ...journals]);
+        setTranscript('');
+      } else {
+        // Send to AI for mood analysis
+        const { data: aiResponse, error: aiError } = await supabase.functions.invoke('ai-assistant', {
+          body: { 
+            prompt: `Analyze the following diary entry from a dementia patient and determine their primary mood. Reply in strict JSON format with two keys: "mood" (string, strictly one of: happy, sad, anxious, confused, neutral) and "summary" (a short 1-sentence summary of what they talked about in English).\n\nEntry: "${transcript}"` 
           }
-          const parsed = JSON.parse(rawJson);
-          if (parsed.mood) aiMood = parsed.mood.toLowerCase();
-          if (parsed.summary) aiSummary = parsed.summary;
-        } catch (e) {
-          console.error('Failed to parse AI response', e, aiResponse);
+        });
+
+        let aiMood = 'neutral';
+        let aiSummary = 'No summary available';
+
+        if (aiResponse && !aiError) {
+          try {
+            // Attempt to parse JSON from AI response if it wrapped it in markdown or directly returned it
+            let rawJson = aiResponse.reply || aiResponse.response || '{}';
+            if (rawJson.includes('```json')) {
+              rawJson = rawJson.split('```json')[1].split('```')[0].trim();
+            } else if (rawJson.includes('```')) {
+              rawJson = rawJson.split('```')[1].trim();
+            }
+            const parsed = JSON.parse(rawJson);
+            if (parsed.mood) aiMood = parsed.mood.toLowerCase();
+            if (parsed.summary) aiSummary = parsed.summary;
+          } catch (e) {
+            console.error('Failed to parse AI response', e, aiResponse);
+          }
         }
+
+        // Save to database
+        const { data: newJournal, error: insertError } = await supabase.from('patient_journals').insert({
+          patient_id: profile.id,
+          transcription: transcript,
+          ai_mood: aiMood,
+          ai_summary: aiSummary
+        }).select().single();
+
+        if (insertError) throw insertError;
+        
+        setJournals([newJournal, ...journals]);
+        setTranscript('');
       }
-
-      // Save to database
-      const { data: newJournal, error: insertError } = await supabase.from('patient_journals').insert({
-        patient_id: profile.id,
-        transcription: transcript,
-        ai_mood: aiMood,
-        ai_summary: aiSummary
-      }).select().single();
-
-      if (insertError) throw insertError;
-      
-      setJournals([newJournal, ...journals]);
-      setTranscript('');
-      
     } catch (e) {
       console.error(e);
       alert('Failed to save journal. Please try again.');

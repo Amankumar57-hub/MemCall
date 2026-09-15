@@ -26,6 +26,7 @@ import Reminiscence from './pages/Patient/Reminiscence'
 import MemoryJournal from './pages/Patient/MemoryJournal'
 import MyFamily from './pages/Patient/MyFamily'
 import FaceScanner from './pages/Patient/FaceScanner'
+import ObjectLocator from './pages/Patient/ObjectLocator'
 import PatientProfile from './pages/Patient/Profile'
 import Settings from './pages/Patient/Settings'
 import Privacy from './pages/Patient/Privacy'
@@ -153,6 +154,7 @@ function App() {
               <Route path="journal" element={<MemoryJournal />} />
               <Route path="my-family" element={<MyFamily />} />
               <Route path="face-scanner" element={<FaceScanner />} />
+              <Route path="object-locator" element={<ObjectLocator />} />
               <Route path="profile" element={<PatientProfile />} />
               <Route path="settings" element={<Settings />} />
               <Route path="privacy" element={<Privacy />} />
