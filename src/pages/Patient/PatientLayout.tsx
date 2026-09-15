@@ -630,7 +630,7 @@ export default function PatientLayout() {
   }, [transcript, navigate, reminders, language])
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#FAFAFA] dark:bg-background font-sans pb-40 transition-colors duration-300">
+    <div className="flex flex-col min-h-[100dvh] bg-[#FAFAFA] dark:bg-background font-sans pb-40 transition-colors duration-300">
       
       {/* Global Top Header */}
       <header className="px-6 py-4 flex justify-between items-center bg-[#FAFAFA] dark:bg-background sticky top-0 z-10 transition-colors duration-300">
@@ -646,11 +646,11 @@ export default function PatientLayout() {
         <div className="flex items-center gap-3">
           <button 
             onClick={() => {
-              const num = localStorage.getItem('familyCallNumber');
-              if (num) {
-                window.location.href = `tel:${num}`;
-              } else {
+              if (location.pathname !== '/patient') {
                 navigate('/patient');
+                setTimeout(() => window.dispatchEvent(new Event('trigger-emergency')), 100);
+              } else {
+                window.dispatchEvent(new Event('trigger-emergency'));
               }
             }}
             className="p-3 bg-red-100 dark:bg-red-900/30 shadow-sm text-red-600 dark:text-red-400 rounded-full border border-red-200 dark:border-red-800/50 transition-colors hover:bg-red-200 dark:hover:bg-red-900/50 animate-pulse"

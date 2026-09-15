@@ -146,9 +146,24 @@
 @layer base {
   * {
     @apply border-border;
+    -webkit-tap-highlight-color: transparent;
   }
   body {
     @apply bg-background text-foreground font-sans antialiased transition-colors duration-300;
+    overscroll-behavior-y: none;
+    user-select: none;
+    -webkit-user-select: none;
+    /* Safe area padding for notches and gesture bars */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+  
+  /* Allow text selection in inputs and textareas */
+  input, textarea {
+    user-select: auto;
+    -webkit-user-select: auto;
   }
 
   h1, h2, h3, h4, h5, h6 {

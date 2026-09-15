@@ -53,7 +53,7 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
+    <div className="min-h-[100dvh] flex items-center justify-center p-4">
       <div className="glass-card w-full max-w-md rounded-[2rem] p-8 md:p-10 shadow-2xl relative overflow-hidden bg-background/80 backdrop-blur-xl border border-border">
         {/* Decorative background blur */}
         <div className="absolute -top-20 -right-20 w-40 h-40 bg-primary/20 blur-3xl rounded-full"></div>

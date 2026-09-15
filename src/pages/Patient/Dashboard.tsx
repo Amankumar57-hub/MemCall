@@ -527,6 +527,35 @@ export default function PatientDashboard() {
           </div>
         </div>
 
+        {/* How are you feeling? */}
+        <div className="bg-white dark:bg-[#1E293B] rounded-3xl p-5 shadow-sm border border-gray-100 dark:border-white/10 mt-2">
+          <div className="mb-4">
+             <h3 className="font-bold text-gray-800 dark:text-[#F8FAFC]">{t('How are you feeling?', language)}</h3>
+             <p className="text-xs text-gray-500 dark:text-[#94A3B8] mt-1">{t('Let us know how you feel today.', language)}</p>
+          </div>
+          <div className="flex justify-between gap-2 px-2 overflow-x-auto hide-scrollbar">
+             {[
+               { label: t('Great', language), englishMood: 'Great', emoji: '😄', color: 'bg-[#DCFCE7] text-[#16A34A] dark:bg-green-900/50 dark:text-green-400' },
+               { label: t('Good', language), englishMood: 'Good', emoji: '🙂', color: 'bg-[#FEF9C3] text-[#CA8A04] dark:bg-yellow-900/50 dark:text-yellow-400' },
+               { label: t('Okay', language), englishMood: 'Okay', emoji: '😐', color: 'bg-[#E0F2FE] text-[#0284C7] dark:bg-blue-900/50 dark:text-blue-400' },
+               { label: t('Tired', language), englishMood: 'Tired', emoji: '🥱', color: 'bg-[#F3E8FF] text-[#9333EA] dark:bg-purple-900/50 dark:text-purple-400' },
+               { label: t('Worried', language), englishMood: 'Worried', emoji: '😟', color: 'bg-[#FFE4E6] text-[#E11D48] dark:bg-rose-900/50 dark:text-rose-400' }
+             ].map((mood, idx) => (
+               <button 
+                 key={idx} 
+                 onClick={() => handleMoodClick(mood.label, mood.englishMood)}
+                 disabled={isSavingMood}
+                 className="flex flex-col items-center min-w-[50px] group transition-transform active:scale-95 disabled:opacity-50"
+               >
+                  <div className={`w-12 h-12 ${mood.color} rounded-full flex items-center justify-center text-xl mb-2 shadow-sm border-2 border-transparent group-hover:border-current`}>
+                    {mood.emoji}
+                  </div>
+                  <span className="text-xs font-bold text-gray-600 dark:text-gray-400">{mood.label}</span>
+               </button>
+             ))}
+          </div>
+        </div>
+
         {/* Date and Weather Banner */}
         <div className="bg-[#FCF9EE] dark:bg-card rounded-3xl p-5 flex items-center justify-between mt-8 shadow-sm dark:border dark:border-border">
           <div className="flex items-center gap-4">
@@ -634,7 +663,7 @@ export default function PatientDashboard() {
         </div>
 
         {/* Bottom Widgets Row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+        <div className="grid grid-cols-1 gap-4 mt-4">
            {/* Daily Progress */}
            <div className="bg-white dark:bg-[#1E293B] rounded-3xl p-5 shadow-sm border border-gray-100 dark:border-white/10">
              <div className="flex justify-between items-center mb-4">
@@ -706,35 +735,6 @@ export default function PatientDashboard() {
                </div>
              </div>
            )}
-
-           {/* How are you feeling? */}
-           <div className="bg-white dark:bg-[#1E293B] rounded-3xl p-5 shadow-sm border border-gray-100 dark:border-white/10">
-             <div className="mb-4">
-                <h3 className="font-bold text-gray-800 dark:text-[#F8FAFC]">{t('How are you feeling?', language)}</h3>
-                <p className="text-xs text-gray-500 dark:text-[#94A3B8] mt-1">{t('Let us know how you feel today.', language)}</p>
-             </div>
-             <div className="flex justify-between gap-2 px-2 overflow-x-auto hide-scrollbar">
-                {[
-                  { label: t('Great', language), englishMood: 'Great', emoji: '😄', color: 'bg-[#DCFCE7] text-[#16A34A] dark:bg-green-900/50 dark:text-green-400' },
-                  { label: t('Good', language), englishMood: 'Good', emoji: '🙂', color: 'bg-[#FEF9C3] text-[#CA8A04] dark:bg-yellow-900/50 dark:text-yellow-400' },
-                  { label: t('Okay', language), englishMood: 'Okay', emoji: '😐', color: 'bg-[#E0F2FE] text-[#0284C7] dark:bg-blue-900/50 dark:text-blue-400' },
-                  { label: t('Tired', language), englishMood: 'Tired', emoji: '🥱', color: 'bg-[#F3E8FF] text-[#9333EA] dark:bg-purple-900/50 dark:text-purple-400' },
-                  { label: t('Worried', language), englishMood: 'Worried', emoji: '😟', color: 'bg-[#FFE4E6] text-[#E11D48] dark:bg-rose-900/50 dark:text-rose-400' }
-                ].map((mood, idx) => (
-                  <button 
-                    key={idx} 
-                    onClick={() => handleMoodClick(mood.label, mood.englishMood)}
-                    disabled={isSavingMood}
-                    className="flex flex-col items-center min-w-[50px] group transition-transform active:scale-95 disabled:opacity-50"
-                  >
-                     <div className={`w-12 h-12 ${mood.color} rounded-full flex items-center justify-center text-xl mb-2 shadow-sm border-2 border-transparent group-hover:border-current`}>
-                       {mood.emoji}
-                     </div>
-                     <span className="text-xs font-bold text-gray-600 dark:text-gray-400">{mood.label}</span>
-                  </button>
-                ))}
-             </div>
-           </div>
         </div>
 
         {/* Bottom Contact Banner */}

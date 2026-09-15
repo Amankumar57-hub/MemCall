@@ -120,7 +120,7 @@ function App() {
   }, [fontSize, highContrast, theme, colorTheme])
 
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center bg-background">
+    return <div className="min-h-[100dvh] flex items-center justify-center bg-background">
       <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
     </div>
   }
@@ -128,7 +128,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <div className="min-h-screen bg-background text-foreground transition-colors duration-300 font-sans">
+        <div className="min-h-[100dvh] bg-background text-foreground transition-colors duration-300 font-sans">
           <AlarmManager session={session} />
           <Routes>
             <Route path="/" element={session ? <Navigate to="/patient" replace /> : <Landing />} />

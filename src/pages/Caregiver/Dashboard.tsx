@@ -497,13 +497,13 @@ export default function CaregiverDashboard() {
   const selectedPatient = patients.find(p => p.id === selectedPatientId)
 
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center bg-background">
+    return <div className="min-h-[100dvh] flex items-center justify-center bg-background">
       <Loader2 className="animate-spin text-primary-hover" size={48} />
     </div>
   }
 
   return (
-    <div className="min-h-screen bg-background dark:bg-[#121212] font-sans pb-24">
+    <div className="min-h-[100dvh] bg-background dark:bg-[#121212] font-sans pb-24">
       {/* Top Header */}
       <header className="px-6 py-4 flex justify-between items-center border-b border-gray-100 dark:border-white/10 bg-white dark:bg-[#1E293B] sticky top-0 z-10">
         <div className="flex items-center gap-6">
