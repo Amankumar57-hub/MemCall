@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { Bell, Droplet, LayoutGrid, CheckCircle2, Activity, Loader2, Plus, X, Trash2, CalendarCheck, Pencil, ArrowLeft } from 'lucide-react'
+import { Bell, Droplet, LayoutGrid, CheckCircle2, Activity, Loader2, Plus, X, Trash2, CalendarCheck, Pencil, ArrowLeft, Search } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
 import { useAppStore } from '../../../store/useAppStore'
 import { t } from '../../../lib/i18n'
@@ -248,6 +248,28 @@ export default function ReminderList() {
             )
           })
         )}
+      </div>
+      
+      {/* Object Locator Section */}
+      <div className="mt-12">
+        <h3 className="text-2xl font-bold text-[#5A4B81] dark:text-white mb-6 flex items-center gap-2">
+          <Search size={24} className="text-[#F59E0B]" />
+          {t('Find My Things', language)}
+        </h3>
+        <Link to="/patient/object-locator" className="bg-[#FEF9C3] dark:bg-[#422006] border border-yellow-100 dark:border-yellow-900/50 rounded-3xl p-6 shadow-sm hover:shadow-md transition-all group flex items-center justify-between">
+          <div className="flex items-center gap-4">
+             <div className="w-14 h-14 bg-yellow-100 dark:bg-yellow-900/50 rounded-2xl flex items-center justify-center text-[#D97706] shadow-sm">
+                <Search size={28} />
+             </div>
+             <div>
+               <h4 className="text-xl font-bold text-gray-800 dark:text-white">{t('Object Locator', language)}</h4>
+               <p className="text-gray-600 dark:text-yellow-200/70 text-sm mt-1">{t('Find your glasses, keys, or medicines', language)}</p>
+             </div>
+          </div>
+          <div className="w-8 h-8 rounded-full bg-white dark:bg-white/10 flex items-center justify-center text-[#D97706] shadow-sm font-bold opacity-0 group-hover:opacity-100 transition-opacity">
+             &gt;
+          </div>
+        </Link>
       </div>
       
       {taskGuides.length > 0 && (

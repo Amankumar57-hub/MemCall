@@ -111,7 +111,7 @@ serve(async (req) => {
 
       let contextText = "Family Members Context:\n"
       if (familyMembers && familyMembers.length > 0) {
-        familyMembers.forEach(member => {
+        familyMembers.forEach((member: any) => {
           contextText += `- ${member.name} (Relation: ${member.relation}) [Photo URL: ${member.avatar_url}]\n`
         })
       } else {
