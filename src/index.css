@@ -148,11 +148,30 @@
     @apply border-border;
     -webkit-tap-highlight-color: transparent;
   }
+  html, body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden; /* Prevent body scrolling/bouncing */
+  }
+
   body {
     @apply bg-background text-foreground font-sans antialiased transition-colors duration-300;
     overscroll-behavior-y: none;
     user-select: none;
     -webkit-user-select: none;
+  }
+
+  #root {
+    width: 100%;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    overflow-x: hidden;
+    position: relative;
+    
     /* Safe area padding for notches and gesture bars */
     padding-top: env(safe-area-inset-top);
     padding-bottom: env(safe-area-inset-bottom);

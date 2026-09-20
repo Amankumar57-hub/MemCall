@@ -630,10 +630,13 @@ export default function PatientLayout() {
   }, [transcript, navigate, reminders, language])
 
   return (
-    <div className="flex flex-col min-h-[100dvh] bg-[#FAFAFA] dark:bg-background font-sans pb-40 transition-colors duration-300">
+    <div className="flex flex-col min-h-full bg-[#FAFAFA] dark:bg-background font-sans pb-32 transition-colors duration-300">
       
       {/* Global Top Header */}
-      <header className="px-6 py-4 flex justify-between items-center bg-[#FAFAFA] dark:bg-background sticky top-0 z-10 transition-colors duration-300">
+      <header 
+        className="px-6 py-4 flex justify-between items-center bg-[#FAFAFA] dark:bg-background sticky top-0 z-10 transition-colors duration-300"
+        style={{ paddingTop: 'calc(1rem + env(safe-area-inset-top))' }}
+      >
         <div className="flex items-center gap-2">
           <div className="w-11 h-11 flex items-center justify-center shrink-0">
             <img src="/memcall-logo.png" alt="MemCall Logo" className="w-full h-full object-contain drop-shadow-sm" />
@@ -734,7 +737,10 @@ export default function PatientLayout() {
       <Outlet />
 
       {/* Global Bottom Nav (Full Width) */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-[#5A4B81] shadow-[0_-8px_30px_rgba(0,0,0,0.12)]">
+      <div 
+        className="fixed bottom-0 left-0 right-0 z-40 bg-[#5A4B81] shadow-[0_-8px_30px_rgba(0,0,0,0.12)]"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      >
         <nav className="max-w-md mx-auto px-6 py-2 flex justify-between items-center text-white relative">
           
           <Link to="/patient" className={`flex flex-col items-center transition-opacity ${location.pathname === '/patient' ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}>
